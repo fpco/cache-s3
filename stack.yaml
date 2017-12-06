@@ -4,3 +4,4 @@ packages:
 - ../tar-conduit
 extra-deps:
 - temporary-resourcet-0.1.0.0
+- lz4-conduit-0.2

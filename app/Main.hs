@@ -2,15 +2,17 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
+import           Control.Applicative        as A
 import           Data.Attoparsec.Text       (parseOnly)
 import           Data.Maybe
 import           Data.Monoid                ((<>))
 import           Data.Text                  as T
 import           Network.AWS                hiding (LogLevel)
+import           Network.AWS.Auth
 import           Network.AWS.Data
 import           Network.AWS.S3.Cache
 import           Network.AWS.S3.Types
-import           Options.Applicative.Simple
+import           Options.Applicative
 import           Prelude                    as P
 import           System.IO                  (BufferMode (LineBuffering),
                                              hSetBuffering, stdout)
@@ -55,37 +57,47 @@ commonArgsParser :: Parser CommonArgs
 commonArgsParser =
   CommonArgs <$>
   (BucketName . T.pack <$>
-   strOption (long "bucket" <> short 'b' <>
-              help "S3 Bucket name where cache will be uploaded to.")) <*>
+   (strOption
+      (long "bucket" <> short 'b' <>
+       help "Name of the S3 bucket that will be used for caching of local files."))) <*>
   (option
      (readerMaybe readRegion)
      (long "region" <> short 'r' <> value Nothing <>
       help
-        ("Region where S3 bucket is located. \
-         \By default 'us-east-1' will be used unless AWS_REGION environment variable \
-         \is set or defualt region is specified in ~/.aws/config"))) <*>
+        "Region where S3 bucket is located. \
+        \By default 'us-east-1' will be used unless AWS_REGION environment variable \
+        \is set or defualt region is specified in ~/.aws/config")) <*>
   (option
      (readerMaybe readText)
      (long "prefix" <> value Nothing <>
       help
-        ("Pefix that will be used for storing objects, usually the project name that this \
-         \tool is used for."))) <*>
+        "Arbitrary prefix that will be used for storing objects, usually the project \
+        \name that this tool is being used for.")) <*>
   (option
      (readerMaybe str)
-     (long "git-dir" <> value Nothing <> metavar "GIT_DIR" <> help "Path to .git repository")) <*>
+     (long "git-dir" <> value Nothing <> metavar "GIT_DIR" <>
+      help
+        "Path to .git repository. Default is either extracted from GIT_DIR environment \
+        \variable or current path is traversed upwards in search for one. This argument \
+        \is only used for inferring --git-branch, thus it is ignored whenever a custom \
+        \value for above argument is specified.")) <*>
   (option
      (readerMaybe readText)
-     (long "branch" <> value Nothing <> metavar "GIT_BRANCH" <> help "Git branch")) <*>
+     (long "git-branch" <> value Nothing <> metavar "GIT_BRANCH" <>
+      help
+        "Current git branch. By default will use the branch the HEAD of repository is \
+        \pointing to. This is argument is used for proper namespacing on S3.")) <*>
   (option
      (readerMaybe readText)
      (long "suffix" <> value Nothing <>
       help
-        "Pefix that will be used for storing objects, usually the project name that \
-        \the tool is used for.")) <*>
+        "Arbitrary suffix that will be used for storing objects in the S3 bucket. \
+        \This argument should be used to store multiple cache objects within the \
+        \same CI build.")) <*>
   (option
      readLogLevel
      (long "verbosity" <> short 'v' <> value LevelInfo <>
-      help ("Verbosity level (debug|info|warn|error)")))
+      help ("Verbosity level (debug|info|warn|error). Default level is 'info'.")))
 
 
 saveArgsParser :: (Parser FilePath -> Parser [FilePath]) -> Parser SaveArgs
@@ -105,15 +117,21 @@ restoreArgsParser :: Parser RestoreArgs
 restoreArgsParser =
   RestoreArgs <$>
   option
-  (readerMaybe readText)
-  (long "base-branch" <> help "Base git branch" <> value Nothing)
+    (readerMaybe readText)
+    (long "base-branch" <> value Nothing <>
+     help "Base git branch. This branch will be used as a readonly fallback upon a \
+          \cache miss, eg. whenever it is a first build for a new branch, it is possible \
+          \to use cache from 'master' branch by setting --base-branch=master")
 
 
+stackRootArg :: Parser (Maybe String)
 stackRootArg =
   option
     (readerMaybe str)
     (long "stack-root" <> value Nothing <> metavar "STACK_ROOT" <>
-     help "Default STACK_ROOT or ~/.stack")
+     help "Global stack directory. Default is taken from stack, i.e a value of \
+          \STACK_ROOT environment variable or a system dependent path: eg.\
+          \~/.stack/ on Linux, C:\\sr on Windows")
 
 saveStackArgsParser :: Parser SaveStackArgs
 saveStackArgsParser = SaveStackArgs <$> saveArgsParser many <*> stackRootArg
@@ -128,13 +146,21 @@ saveStackWorkArgsParser =
      (option
         (readerMaybe str)
         (long "stack-yaml" <> value Nothing <> metavar "STACK_YAML" <>
-         help "Default STACK_YAML or ./stack.yaml")) <*>
+         help
+           "Path to stack configuration file. Default is taken from stack: i.e. \
+           \STACK_YAML environment variable or ./stack.yaml")) <*>
      (option
         (readerMaybe str)
         (long "work-dir" <> value Nothing <> metavar "STACK_WORK" <>
-         help "Default STACK_WORK or .stack-work")) <*
+         help
+           "Relative stack work directory. Default is taken from stack, i.e. \
+           \STACK_WORK environment variable or ./.stack-work/")) <*
      helpOption)
-    (progDesc "Command for caching the data in the S3 bucket." <> fullDesc)
+    (progDesc
+       "Command for caching content of .stack-work directory in the S3 bucket. \
+       \For projects with many packages, all of the .stack-work directories will \
+       \be saved." <>
+     fullDesc)
 
 
 actionParser :: Parser Action
@@ -148,18 +174,42 @@ actionParser =
    command "restore" $
    info
      (Restore <$> restoreArgsParser <* helpOption <|> restoreStackCommandParser)
-     (progDesc "Command for restoring cache from S3 bucket." <> fullDesc))
+     (progDesc "Command for restoring cache from S3 bucket." <> fullDesc)) <|>
+  (clearParser
+     Clear
+     "clear"
+     "Clears out cache from S3 bucket. This command uses the same arguments as \
+     \`cache-s3 save` to uniquely identify the object on S3, therefore same arguments and \
+     \subcommands must be suppied in order to clear out the cache created with \
+     \`save` command."
+     (clearParser
+        ClearStack
+        "stack"
+        "Clear stack cache"
+        (clearParser ClearStackWork "work" "Clear stack project work cache" A.empty)))
   where
+    clearParser tyCon com desc altPreParse =
+      subparser $
+      command com $ info (altPreParse <|> pure tyCon <* helpOption) (progDesc desc <> fullDesc)
     saveStackParser = SaveStack <$> saveStackArgsParser <* helpOption
     saveStackCommandParser =
       subparser $
       command "stack" $
       info
         (saveStackParser <|> SaveStackWork <$> saveStackWorkArgsParser)
-        (progDesc "Command for caching stack data in the S3 bucket." <> fullDesc)
+        (progDesc
+           "Command for caching global stack data in the S3 bucket. This will \
+           \include stack root directory and a couple of others that are used \
+           \by stack for storing executables. In order to save local .stack-work \
+           \directory(ies), use `cache-s3 save stack work` instead." <>
+         fullDesc)
     restoreStackArgsParser =
       RestoreStackArgs <$> restoreArgsParser <*>
-      (switch (long "upgrade" <> help "Attempt to upgrade stack to newest version.")) <*>
+      (switch
+         (long "upgrade" <>
+          help
+            "After restoring stack and its related files, try to upgrade \
+            \stack to newest version.")) <*>
       stackRootArg
     restoreStackCommandParser =
       subparser $
@@ -171,12 +221,13 @@ actionParser =
       subparser $
       command "work" $
       info
-        (RestoreStackWork <$> restoreStackArgsParser)
-        (progDesc "Command for restoring stack work directories from the S3 bucket." <> fullDesc)
+        (RestoreStackWork <$> restoreArgsParser)
+        (progDesc "Command for restoring .stack-work directory(ies) from the S3 bucket." <> fullDesc)
 
 
 main :: IO ()
 main = do
+  cFile <- credFile
   _args@(Args commonArgs acts) <-
     execParser $
     info
@@ -184,8 +235,14 @@ main = do
        abortOption ShowHelpText (long "help" <> short 'h' <> help "Display this message."))
       (header "cache-s3 - Use AWS S3 bucket as cache for your build environment" <>
        progDesc
-         "Save local directories to S3 bucket and restore them later to their original locations." <>
+         ("Save local directories to S3 bucket and restore them later to their original \
+          \locations. AWS credentials will be extracted form the environment in a similar \
+          \way that aws-cli does it: you can either place them in " <>
+          cFile <>
+          " or set them as environment variables " <>
+          T.unpack envAccessKey <>
+          " and " <>
+          T.unpack envSecretKey) <>
        fullDesc)
   hSetBuffering stdout LineBuffering
   runCacheS3 commonArgs acts
-  print _args

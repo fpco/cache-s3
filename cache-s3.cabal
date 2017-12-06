@@ -39,24 +39,24 @@ library
                      , git
                      , http-types
                      , lens
+                     , lz4-conduit
                      , memory
                      , monad-control
                      , monad-logger
                      , mtl
-                     , process
-                     , time
-                     , transformers >= 0.5.2.0
-                     , vector >= 0.12.0.0
-                     --, lz4-conduit
                      , path
                      , path-io
+                     , process
                      , resourcet
                      , safe-exceptions
                      , tar-conduit
                      , temporary-resourcet
                      , text
-                     , unordered-containers
+                     , time
+                     , transformers >= 0.5.2.0
                      , unix
+                     , unordered-containers
+                     , vector >= 0.12.0.0
                      , yaml
   default-language:    Haskell2010
   ghc-options:         -Wall
@@ -65,12 +65,12 @@ executable cache-s3
   hs-source-dirs:      app
   main-is:             Main.hs
   ghc-options:         -O2 -threaded -rtsopts -with-rtsopts=-N
-  build-depends:       base
-                     , amazonka
+  build-depends:       amazonka
                      , amazonka-s3
                      , attoparsec
+                     , base
                      , cache-s3
-                     , optparse-simple
+                     , optparse-applicative
                      , text
   default-language:    Haskell2010
 

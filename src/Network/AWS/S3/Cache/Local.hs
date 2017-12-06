@@ -38,6 +38,7 @@ import           Prelude                      as P
 import           System.Directory
 import           System.IO                    hiding (openTempFile)
 import           System.IO.Temp
+import qualified Data.Conduit.LZ4 as LZ4
 
 tarFiles :: (MonadCatch m, MonadResource m, MonadLogger m) =>
             [FilePath] -> ConduitM a ByteString m ()
@@ -49,9 +50,6 @@ tarFiles dirs = do
     then logErrorN "No paths to cache has been specified."
     else sourceList uniqueDirs .| iterM logPath .| filePathConduit .| void tar
   where
-    -- .| iterM logFileInfo
-    -- logFileInfo (Left fi) = logDebugN $ "Saving: " <> T.decodeUtf8With T.lenientDecode (filePath fi)
-    -- logFileInfo _ = return ()
     logPath fp = do
       exist <- liftIO $ doesPathExist fp
       if exist
@@ -67,11 +65,13 @@ removePrefixSorted (x:xs) = x : L.filter (not . (x `L.isPrefixOf`)) xs
 getCompressionConduit :: MonadResource m =>
                          Compression -> Conduit ByteString m ByteString
 getCompressionConduit GZip = gzip
+getCompressionConduit LZ4  = LZ4.compress Nothing
 
 
 getDeCompressionConduit :: MonadResource m =>
-                         Compression -> Conduit ByteString m ByteString
+                           Compression -> Conduit ByteString m ByteString
 getDeCompressionConduit GZip = ungzip
+getDeCompressionConduit LZ4  = LZ4.decompress
 
 
 prepareCache ::

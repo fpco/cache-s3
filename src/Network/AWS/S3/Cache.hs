@@ -32,6 +32,9 @@ import           Network.AWS.S3.Cache.Stack
 import           Network.AWS.S3.Cache.Types
 import           System.Exit
 
+import Control.Monad.Trans.Resource (ResourceT)
+import Control.Monad.Trans.Control (MonadBaseControl)
+
 -- TODO:
 -- * Create new logger instead of modifying anotherone
 -- * Formal log level prettier
@@ -53,23 +56,33 @@ formatLogger minLogLevel (LoggingT f) =
 formatRFC822 :: UTCTime -> String
 formatRFC822 = formatTime defaultTimeLocale rfc822DateFormat
 
+
+-- | Run the cache action.
+run ::
+     (MonadBaseControl IO m, MonadIO m)
+  => ReaderT r (LoggingT (ResourceT m)) a
+  -> L.LogLevel
+  -> r
+  -> m a
+run action minLogLevel conf =
+  runResourceT $ runStdoutLoggingT $ formatLogger minLogLevel $ runReaderT action conf
+
+
 saveCache :: Text -> Compression -> [FilePath] -> L.LogLevel -> Config -> IO ()
 saveCache hAlgTxt comp dirs minLogLevel conf = do
   let hashNoSupport sup =
         logErrorN $
         "Hash algorithm '" <> hAlgTxt <> "' is not supported, use one of these instead: " <>
         T.intercalate ", " sup
-  runResourceT $
-    runStdoutLoggingT $
-    withHashAlgorithm_ hAlgTxt hashNoSupport $ \hAlg ->
-      formatLogger minLogLevel $ runReaderT (getCacheHandle dirs hAlg comp >>= uploadCache) conf
+  run
+    (withHashAlgorithm_ hAlgTxt hashNoSupport $ \hAlg ->
+       getCacheHandle dirs hAlg comp >>= uploadCache)
+    minLogLevel
+    conf
+
 
 restoreCache :: L.LogLevel -> Config -> IO Bool
-restoreCache minLogLevel conf =
-  runResourceT $
-  runStdoutLoggingT $
-  formatLogger minLogLevel $ do
-    runReaderT (maybe False (const True) <$> runMaybeT (downloadCache restoreFilesFromCache)) conf
+restoreCache = run (maybe False (const True) <$> runMaybeT (downloadCache restoreFilesFromCache))
 
 mkConfig :: (MonadIO m, MonadCatch m) =>
             CommonArgs -> m Config
@@ -84,7 +97,7 @@ mkConfig CommonArgs {..} = do
 runCacheS3 :: CommonArgs -> Action -> IO ()
 runCacheS3 ca@CommonArgs {..} action = do
   let stackSuffix = "stack"
-      stackWorkSuffix = "stack-work"
+      stackWorkSuffix = stackSuffix <> "-work"
   case action of
     Save (SaveArgs {..}) -> do
       config <- mkConfig ca
@@ -95,7 +108,6 @@ runCacheS3 ca@CommonArgs {..} action = do
         Save saveArgs {savePaths = savePaths saveArgs ++ stackGlobalPaths}
     SaveStackWork (SaveStackWorkArgs {stackSaveArgs = SaveStackArgs {..}, ..}) -> do
       stackLocalPaths <- getStackWorkPaths stackRoot stackYaml workDir
-      -- TODO: possibly add arg --save-global
       runCacheS3 (ca {commonSuffix = Just stackWorkSuffix}) $
         Save saveArgs {savePaths = savePaths saveArgs ++ stackLocalPaths}
     Restore (RestoreArgs {..}) -> do
@@ -109,7 +121,10 @@ runCacheS3 ca@CommonArgs {..} action = do
     RestoreStack (RestoreStackArgs {..}) -> do
       when restoreStackUpgrade $ upgradeStack restoreStackRoot
       runCacheS3 (ca {commonSuffix = Just stackSuffix}) (Restore restoreArgs)
-    RestoreStackWork (RestoreStackArgs {..}) -> do
-      when restoreStackUpgrade $ upgradeStack restoreStackRoot
-      runCacheS3 (ca {commonSuffix = Just stackWorkSuffix}) (Restore restoreArgs)
-    _ -> error "Not yet unsupported"
+    RestoreStackWork args -> do
+      runCacheS3 (ca {commonSuffix = Just stackWorkSuffix}) (Restore args)
+    Clear -> mkConfig ca >>= run deleteCache commonVerbosity
+    ClearStack ->
+      mkConfig (ca {commonSuffix = Just stackSuffix}) >>= run deleteCache commonVerbosity
+    ClearStackWork ->
+      mkConfig (ca {commonSuffix = Just stackWorkSuffix}) >>= run deleteCache commonVerbosity

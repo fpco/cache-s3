@@ -27,7 +27,7 @@ import           Network.AWS.S3.Types
 
 data Compression
   = GZip
-  -- | LZ4
+  | LZ4
   deriving (Show, Eq)
 
 data Hashing
@@ -53,7 +53,8 @@ mkObjectKey :: Maybe Text -- ^ Prefix (eg. project name)
             -> ObjectKey
 mkObjectKey mPrefix mBranchName mSuffix =
   ObjectKey $
-  maybe "" (<> "/") mPrefix <> fromMaybe "" mBranchName <> maybe "" ("." <>) mSuffix <> ".cache-s3"
+  "cache-s3/" <> maybe "" (<> "/") mPrefix <> fromMaybe "" mBranchName <> maybe "" ("." <>) mSuffix <>
+  ".cache"
 
 
 hashAlgorithmMetaKey :: Text
@@ -67,12 +68,13 @@ compressionMetaKey :: Text
 compressionMetaKey = "compression"
 
 getCompressionName :: Compression -> Text
-getCompressionName GZip = "gzip"
+getCompressionName = T.toLower . T.pack . show
 
 readCompression :: Text -> Maybe Compression
 readCompression compTxt =
   case T.toLower compTxt of
     "gzip" -> Just GZip
+    "lz4"  -> Just LZ4
     _      -> Nothing
 
 
@@ -143,11 +145,13 @@ data Action
   | Restore RestoreArgs
   -- * --base-branch (def master)
   | RestoreStack RestoreStackArgs
-  | RestoreStackWork RestoreStackArgs
+  | RestoreStackWork RestoreArgs
   -- | Same as restore
   -- * --upgrade (try to upgrade stack if there is new version uvailable)
   -- * --install (try to install stack if it is missing)
-  | Purge
+  | Clear
+  | ClearStack
+  | ClearStackWork
   deriving (Show)
 
 

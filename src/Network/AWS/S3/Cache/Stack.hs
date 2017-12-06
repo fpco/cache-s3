@@ -12,7 +12,6 @@
 module Network.AWS.S3.Cache.Stack where
 
 import           Control.Exception          (throwIO)
-import           Control.Monad              (when)
 import           Data.Aeson
 import           Data.Git
 import qualified Data.HashMap.Strict        as HM
@@ -21,7 +20,6 @@ import           Data.String
 import qualified Data.Text                  as T
 import qualified Data.Vector                as V
 import           Data.Yaml
-import           Network.AWS.S3.Cache.Types
 import           System.Environment
 import           System.FilePath
 import           System.Process

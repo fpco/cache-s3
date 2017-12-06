@@ -47,6 +47,7 @@ import           Network.AWS.Data.Body
 import           Network.AWS.Data.Log                 (build)
 import           Network.AWS.S3.Cache.Types
 import           Network.AWS.S3.CreateMultipartUpload
+import           Network.AWS.S3.DeleteObject
 import           Network.AWS.S3.GetObject
 import           Network.AWS.S3.StreamingUpload
 import           Network.AWS.S3.Types
@@ -86,7 +87,7 @@ hasCacheChanged newHash = do
           Nothing -> do
             logAWS LevelWarn $ "Previous cache is missing a hash value '" <> hashKey <> "'"
         return $ mOldHash
-  mOldHashTxt <- sendAWSCustom getObjReq onErr onSucc
+  mOldHashTxt <- sendAWS getObjReq onErr onSucc
   mOldHash <- maybe (return Nothing) decodeHash mOldHashTxt
   return (Just newHash /= mOldHash)
 
@@ -142,7 +143,7 @@ uploadCache (hdl, cSize, newHash, comp) = do
       reporter <- getInfoLoggerIO
       runLoggingAWS_ $
         runConduit $
-        sourceHandle hdl .| passthroughSink (streamUpload (Just 1024) cmu) (const $ pure ()) .|
+        sourceHandle hdl .| passthroughSink (streamUpload (Just 1024) cmu) (void . pure) .|
         getProgressReporter reporter cSize .|
         sinkNull
       logAWS LevelInfo $ "Finished uploading. Files are cached on S3."
@@ -161,16 +162,30 @@ onNothing mArg whenNothing = do
 
 
 
-downloadCache ::
-     ( MonadReader c m
-     , HasObjectKey c ObjectKey
-     , MonadResource m
+deleteCache ::
+     ( MonadResource m
      , MonadLoggerIO m
+     , MonadReader c m
      , HasEnv c
+     , HasObjectKey c ObjectKey
+     , HasBucketName c BucketName
+     )
+  => m ()
+deleteCache = do
+  c <- ask
+  sendAWS_ (deleteObject (c ^. bucketName) (c ^. objectKey)) (void . pure)
+
+-- | Download an object from S3 and handle its content using the supplied sink.
+downloadCache ::
+     ( MonadResource m
+     , MonadLoggerIO m
+     , MonadReader c m
+     , HasEnv c
+     , HasObjectKey c ObjectKey
      , HasBucketName c BucketName
      )
   => (forall h. HashAlgorithm h =>
-                  Compression -> h -> Sink S.ByteString (ResourceT IO) (Digest h))
+       Compression -> h -> Sink S.ByteString (ResourceT IO) (Digest h))
   -> MaybeT m ()
 downloadCache sink = do
   c <- ask
@@ -183,7 +198,7 @@ downloadCache sink = do
               MaybeT $ return Nothing
           _ -> return (Just LevelError, ())
   logAWS LevelInfo "Checking for previously stored cache."
-  sendAWSCustom getObjReq onErr $ \resp -> do
+  sendAWS getObjReq onErr $ \resp -> do
     logAWS LevelDebug $ "Starting to download previous cache."
     compAlgTxt <-
       HM.lookup compressionMetaKey (resp ^. gorsMetadata) `onNothing`
@@ -229,33 +244,26 @@ downloadCache sink = do
           MaybeT $ return Nothing
 
 
--- | Send request to AWS and process the response with a handler. A separate
--- error handler will be invoked whenever an error occurs, which suppose to
--- return some sort of default value. Error is logged using `MonadLoggger` as a
--- `LevelError`, use `sendCustomAWS` to overrride this behavior.
+-- | Send request to AWS and process the response with a handler. A separate error handler will be
+-- invoked whenever an error occurs, which suppose to return some sort of default value and the
+-- `L.LogLevel` this error corresponds to.
 sendAWS ::
-     (MonadReader r m, MonadResource m, HasEnv r, AWSRequest a, MonadLogger m)
-  => a
-  -> (Error -> m b)
-  -> (Rs a -> m b)
-  -> m b
-sendAWS req onErr = runLoggingAWS (send req) (\err -> onErr err >>= return . (,) (Just LevelError))
-
-sendAWS_ ::
-     (MonadReader r m, MonadResource m, HasEnv r, AWSRequest a, MonadLogger m)
-  => a
-  -> (Rs a -> m ())
-  -> m ()
-sendAWS_ req = sendAWS req (const $ pure ())
-
-
-sendAWSCustom ::
      (MonadReader r m, MonadResource m, HasEnv r, AWSRequest a, MonadLogger m)
   => a
   -> (Error -> m (Maybe L.LogLevel, b))
   -> (Rs a -> m b)
   -> m b
-sendAWSCustom req = runLoggingAWS (send req)
+sendAWS req = runLoggingAWS (send req)
+
+
+-- | Same as `sendAWS`, but discard the response and simply error out on any received AWS error
+-- responses.
+sendAWS_ ::
+     (MonadReader r m, MonadResource m, HasEnv r, AWSRequest a, MonadLogger m)
+  => a
+  -> (Rs a -> m ())
+  -> m ()
+sendAWS_ req = runLoggingAWS (send req) (const $ return (Just LevelError, ()))
 
 
 -- | Report every problem as `LevelError` and discard the result.
@@ -264,7 +272,7 @@ runLoggingAWS_ :: (MonadReader r m, MonadResource m, HasEnv r, MonadLogger m) =>
 runLoggingAWS_ action = runLoggingAWS action (const $ pure (Just LevelError, ())) return
 
 
-
+-- | General helper for calling AWS and conditionally log the outcome upon a received error.
 runLoggingAWS
   :: (MonadReader r m, MonadResource m, HasEnv r, MonadLogger m) =>
      AWS t -> (Error -> m (Maybe L.LogLevel, b)) -> (t -> m b) -> m b
@@ -282,8 +290,7 @@ runLoggingAWS action onErr onSucc = do
       return def
     Right suc -> onSucc suc
 
-
-
+-- | Logger that will add object info to the entry.
 logAWS :: (MonadReader a m, MonadLogger m, HasObjectKey a ObjectKey) =>
           L.LogLevel -> Text -> m ()
 logAWS ll msg = do
@@ -292,7 +299,7 @@ logAWS ll msg = do
   logOtherN ll $ "<" <> objKeyTxt <> "> - " <> msg
 
 
-
+-- | Compute chunk thresholds and report progress.
 reportProgress ::
      (MonadIO m)
   => (Word64 -> Word64 -> m a)
@@ -311,15 +318,20 @@ reportProgress reporter (thresh, stepSum, prevSum, prevTime) chunkSize
     (perc, curThresh):restThresh = thresh
 
 
+-- | Helper action that returns a function that can do info level logging in the `MonadIO`.
 getInfoLoggerIO :: (MonadIO n, MonadLoggerIO m) => m (Text -> n ())
 getInfoLoggerIO = do
   loggerIO <- askLoggerIO
   return $ \ txt -> liftIO $ loggerIO defaultLoc "" LevelInfo (toLogStr txt)
 
 
+-- | Format bytes into a human readable string
 formatBytes :: Word64 -> Text
 formatBytes = F.sformat (F.bytes @Double (F.fixed 1 F.% " "))
 
+
+-- | Creates a conduit that will execute supplied action 10 time each for every 10% of the data is
+-- being passed through it. Supplied action will receive `Text` with status and speed of processing.
 getProgressReporter ::
      MonadIO m => (Text -> m ()) -> Word64 -> ConduitM S.ByteString S.ByteString m ()
 getProgressReporter reporterTxt totalSize = do
