@@ -14,7 +14,6 @@
 
 module Network.AWS.S3.Cache.Local where
 
-import           Control.Lens
 import           Control.Monad                (void)
 import           Control.Monad.Catch          (MonadCatch)
 import           Control.Monad.IO.Class
@@ -26,13 +25,14 @@ import           Crypto.Hash.Conduit
 import           Data.ByteString              as S
 import           Data.Conduit
 import           Data.Conduit.Binary
-import           Data.Conduit.List
+import           Data.Conduit.List            as C
 import           Data.Conduit.Tar
 import           Data.Conduit.Zlib
-import           Data.List                    as L --(nub, sort)
+import           Data.List                    as L
 import           Data.Monoid                  ((<>))
 import           Data.Text                    as T
 import           Data.Void
+import           Data.Word
 import           Network.AWS.S3.Cache.Types
 import           Prelude                      as P
 import           System.Directory
@@ -49,6 +49,9 @@ tarFiles dirs = do
     then logErrorN "No paths to cache has been specified."
     else sourceList uniqueDirs .| iterM logPath .| filePathConduit .| void tar
   where
+    -- .| iterM logFileInfo
+    -- logFileInfo (Left fi) = logDebugN $ "Saving: " <> T.decodeUtf8With T.lenientDecode (filePath fi)
+    -- logFileInfo _ = return ()
     logPath fp = do
       exist <- liftIO $ doesPathExist fp
       if exist
@@ -57,7 +60,7 @@ tarFiles dirs = do
 
 -- | Avoid saving duplicate files by removing any subpaths. Paths must be canonicalized and sorted.
 removePrefixSorted :: Eq a => [[a]] -> [[a]]
-removePrefixSorted [] = []
+removePrefixSorted []     = []
 removePrefixSorted (x:xs) = x : L.filter (not . (x `L.isPrefixOf`)) xs
 
 
@@ -73,37 +76,37 @@ getDeCompressionConduit GZip = ungzip
 
 prepareCache ::
      (HashAlgorithm h, MonadResource m)
-  => Compression -> ConduitM ByteString Void m (Handle, Digest h, Compression)
+  => Compression -> ConduitM ByteString Void m (Handle, Word64, Digest h, Compression)
 prepareCache compression = do
-  (_, _, tmpHandle) <- openTempFile Nothing "cache-s3.tar.gz"
+  (_, _, tmpHandle) <- openTempFile Nothing "cache-s3.tar"
   hash <- getZipSink
     (ZipSink (getCompressionConduit compression .| sinkHandle tmpHandle) *> ZipSink sinkHash)
-  liftIO $ do
+  cSize <- liftIO $ do
     hFlush tmpHandle
+    cSize <- hTell tmpHandle
     hSeek tmpHandle AbsoluteSeek 0
-  return (tmpHandle, hash, compression)
+    return cSize
+  return (tmpHandle, fromInteger cSize, hash, compression)
 
 
 -- | Create a compressed tarball in the temporary directory. Compute the hash value of the tarball
 -- prior to the compression, in order to avoid any possible nondeterminism with future compression
 -- algorithms. Returns the computed hash and the file handle where tarball can be read from.
 getCacheHandle ::
-     ( HashAlgorithm h
-     , MonadCatch m
-     , MonadResource m
-     , MonadLogger m
-     )
+     (HashAlgorithm h, MonadCatch m, MonadResource m, MonadLogger m)
   => [FilePath]
   -> h
   -> Compression
-  -> m (Handle, Digest h, Compression)
+  -> m (Handle, Word64, Digest h, Compression)
 getCacheHandle dirs _ comp = runConduit $ tarFiles dirs .| prepareCache comp
 
 
 -- | Restores all of the files from the tarball and computes the hash at the same time.
 restoreFilesFromCache ::
-     (HashAlgorithm h, MonadResource m)
-  => Compression
-  -> h -> ConduitM ByteString Void m (Digest h)
+     HashAlgorithm h
+  => Compression -- ^ Compression algorithm the stream is expected to be compressed with.
+  -> h -- ^ Hashing algorithm to use for computation of hash value of the extracted tarball.
+  -> ConduitM ByteString Void (ResourceT IO) (Digest h)
 restoreFilesFromCache comp _ =
-  getDeCompressionConduit comp .| getZipSink (ZipSink (untarFinally restoreFile) *> ZipSink sinkHash)
+  getDeCompressionConduit comp .|
+  getZipConduit (ZipConduit (untarFinally restoreFile) *> ZipConduit sinkHash)

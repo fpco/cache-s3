@@ -16,16 +16,14 @@
 module Network.AWS.S3.Cache.Types where
 
 import           Control.Lens
-import           Control.Monad
 import           Control.Monad.Logger as L
 import           Crypto.Hash
-import           Data.ByteString      as S
+import           Data.Maybe           (fromMaybe)
 import           Data.Monoid          ((<>))
 import           Data.Text            as T
 import           Data.Typeable
 import           Network.AWS.Env
 import           Network.AWS.S3.Types
-import           Network.AWS.Types
 
 data Compression
   = GZip
@@ -36,9 +34,9 @@ data Hashing
 
 data Config =
   Config
-  { _bucketName    :: !BucketName
-  , _objectKey     :: !ObjectKey
-  , _confEnv       :: !Env
+  { _bucketName :: !BucketName
+  , _objectKey  :: !ObjectKey
+  , _confEnv    :: !Env
   }
 
 makeLensesWith classUnderscoreNoPrefixFields ''Config
@@ -50,11 +48,12 @@ instance HasEnv Config where
 
 
 mkObjectKey :: Maybe Text -- ^ Prefix (eg. project name)
-            -> Text -- ^ Git branch name
+            -> Maybe Text -- ^ Git branch name
             -> Maybe Text -- ^ Suffix
             -> ObjectKey
-mkObjectKey mPrefix branchName mSuffix =
-  ObjectKey $ maybe "" (<> "/") mPrefix <> branchName <> maybe "" ("." <>) mSuffix <> ".cache-s3"
+mkObjectKey mPrefix mBranchName mSuffix =
+  ObjectKey $
+  maybe "" (<> "/") mPrefix <> fromMaybe "" mBranchName <> maybe "" ("." <>) mSuffix <> ".cache-s3"
 
 
 hashAlgorithmMetaKey :: Text
@@ -76,14 +75,16 @@ readCompression compTxt =
     "gzip" -> Just GZip
     _      -> Nothing
 
+
 data CommonArgs = CommonArgs
-  { commonRegion    :: !(Maybe Region)
-  , commonBucket    :: !BucketName
+  { commonBucket    :: !BucketName
+  , commonRegion    :: !(Maybe Region)
   , commonPrefix    :: !(Maybe Text)
-  , commonBranch    :: !Text
+  , commonGitDir    :: !(Maybe FilePath)
+  , commonGitBranch :: !(Maybe Text)
   , commonSuffix    :: !(Maybe Text)
   , commonVerbosity :: !L.LogLevel
-  }
+  } deriving (Show)
 
 
 data SaveArgs = SaveArgs
@@ -92,11 +93,30 @@ data SaveArgs = SaveArgs
   , saveCompression :: !Compression
   } deriving (Show)
 
+data SaveStackArgs = SaveStackArgs
+  { saveArgs  :: !SaveArgs
+  , stackRoot :: !(Maybe FilePath)
+  } deriving (Show)
+
+data SaveStackWorkArgs = SaveStackWorkArgs
+  { stackSaveArgs :: !SaveStackArgs
+  , stackYaml     :: !(Maybe FilePath)
+  , workDir       :: !(Maybe FilePath)
+  } deriving (Show)
+
+
 data RestoreArgs = RestoreArgs
   { restoreBaseBranch :: !(Maybe Text)
   } deriving (Show)
 
 
+data RestoreStackArgs = RestoreStackArgs
+  { restoreArgs         :: !RestoreArgs
+  -- , restoreStackInstall :: !Bool -- Probably a bit too involved of a feature for too little
+  -- benefit
+  , restoreStackUpgrade :: !Bool
+  , restoreStackRoot    :: !(Maybe FilePath)
+  } deriving (Show)
 
 -- All Actions need:
 -- * --aws-key (def from env)
@@ -113,7 +133,8 @@ data Action
   -- * --paths [path] (or many of --path | -p)
   -- * --hash | -p (def: SHA256)
   -- * --compression | -c (def: gzip)
-  | SaveStack
+  | SaveStack SaveStackArgs
+  | SaveStackWork SaveStackWorkArgs
   -- | Same as Save plus:
   -- * (local|global)
   -- * --work-dir (def STACK_WORK -> .stack-work)
@@ -121,14 +142,21 @@ data Action
   -- * --stack-yaml (def STACK_YAML -> call `stack path --config-location` -> stack.yaml)
   | Restore RestoreArgs
   -- * --base-branch (def master)
-  | RestoreStack
+  | RestoreStack RestoreStackArgs
+  | RestoreStackWork RestoreStackArgs
   -- | Same as restore
-  -- --local-only
-  -- * [global|local]
-  --   * --upgrade (try to upgrade stack on cache hit)
-  --   * --install (try to install stack on cache miss)
+  -- * --upgrade (try to upgrade stack if there is new version uvailable)
+  -- * --install (try to install stack if it is missing)
   | Purge
   deriving (Show)
+
+
+-- cache-s3 -b foo save stack --stack-root
+-- cache-s3 -b foo save stack work-dir --stack-yaml --work-dir
+
+-- cache-s3 -b foo restore stack
+-- cache-s3 -b foo restore stack work-dir
+
 
 -- STACK:
 -- stack-root: /home/lehins/.stack
@@ -141,7 +169,7 @@ data Action
 withHashAlgorithm_ ::
      forall m a. Monad m
   => Text -- ^ Name of the hash algorithm (case insensitive)
-  -> ([Text] -> m a) -- ^ On no hash algorithm n ame support
+  -> ([Text] -> m a) -- ^ On no hash algorithm name support
   -> (forall h. (Show h, Typeable h, HashAlgorithm h) => h -> m a)
   -> m a
 withHashAlgorithm_ hTxt onErr action = do
@@ -213,16 +241,3 @@ withHashAlgorithm hTxt action = do
         Left e2   -> return $ Left (e1 <> e2)
         Right res -> return $ Right res
     Right res -> return $ Right res
-
--- bar = 
---   foo (HM.lookup hashAlgorithmMetaKey (resp ^. gorsMetadata)) onNothing $ \ halg ->
---     foo (HM.lookup hashAlgName (resp ^. gorsMetadata)) onNothing' $ \ htxt ->
---        withHashAlgorithm_ hashAlgName noHashAlgSupport $ \hashAlg -> do
---           mHash <- decodeHash hashTxt
---           foo mHash onNothing'' $ \ hash ->
---             foo (HM.lookup compressionMetaKey (resp ^. gorsMetadata)) onNothing''' $ \ compKey ->
---               foo (readCompression compKey) $ \ comp ->
---                 perform action
-
-
-

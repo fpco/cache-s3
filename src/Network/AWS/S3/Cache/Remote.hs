@@ -4,6 +4,7 @@
 {-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TypeApplications      #-}
 -- |
 -- Module      : Network.AWS.S3.Cache.Remote
 -- Copyright   : (c) FP Complete 2017
@@ -17,6 +18,7 @@ module Network.AWS.S3.Cache.Remote where
 import           Control.Lens
 import           Control.Monad.Logger                 as L
 import           Control.Monad.Reader
+import           Control.Monad.Trans.Maybe
 import           Control.Monad.Trans.Resource         (MonadResource)
 import           Control.Monad.Trans.Resource         (ResourceT)
 import           Crypto.Hash                          (Digest, HashAlgorithm,
@@ -28,12 +30,18 @@ import           Data.ByteString.Builder              (toLazyByteString)
 import           Data.ByteString.Lazy                 as SL
 import           Data.Conduit
 import           Data.Conduit.Binary
+import           Data.Conduit.List                    as CL
 import           Data.HashMap.Strict                  as HM
 import           Data.Monoid                          ((<>))
+import           Data.Ratio                           ((%))
 import           Data.Text                            as T
 import           Data.Text.Encoding                   as T
 import           Data.Text.Encoding.Error             as T
+import           Data.Time
 import           Data.Typeable
+import           Data.Word                            (Word64)
+import qualified Formatting                           as F (bytes, fixed,
+                                                            sformat, (%))
 import           Network.AWS
 import           Network.AWS.Data.Body
 import           Network.AWS.Data.Log                 (build)
@@ -43,8 +51,8 @@ import           Network.AWS.S3.GetObject
 import           Network.AWS.S3.StreamingUpload
 import           Network.AWS.S3.Types
 import           Network.HTTP.Types.Status            (status404)
+import           Prelude                              as P
 import           System.IO                            (Handle)
-import Control.Monad.Trans.Maybe
 
 hasCacheChanged ::
      ( MonadReader r m
@@ -106,13 +114,13 @@ uploadCache ::
      , HasObjectKey r ObjectKey
      , HasBucketName r BucketName
      , MonadResource m
-     , MonadLogger m
+     , MonadLoggerIO m
      , HashAlgorithm h
      , Typeable h
      )
-  => (Handle, Digest h, Compression)
+  => (Handle, Word64, Digest h, Compression)
   -> m ()
-uploadCache (hdl, newHash, comp) = do
+uploadCache (hdl, cSize, newHash, comp) = do
   c <- ask
   hasChanged <- hasCacheChanged newHash
   if hasChanged
@@ -127,10 +135,19 @@ uploadCache (hdl, newHash, comp) = do
               , (compressionMetaKey, getCompressionName comp)
               ]
       logAWS LevelInfo $
-        "Data change detected, uploading cache to S3 with " <> hashKey <> ": " <> newHashTxt
-      runLoggingAWS_ $ runConduit $ sourceHandle hdl .| void (streamUpload Nothing cmu)
+        "Data change detected, caching " <> formatBytes cSize <> " into S3 with " <>
+        hashKey <>
+        ": " <>
+        newHashTxt
+      reporter <- getInfoLoggerIO
+      runLoggingAWS_ $
+        runConduit $
+        sourceHandle hdl .| passthroughSink (streamUpload (Just 1024) cmu) (const $ pure ()) .|
+        getProgressReporter reporter cSize .|
+        sinkNull
       logAWS LevelInfo $ "Finished uploading. Files are cached on S3."
     else logAWS LevelInfo "No change to cache was detected."
+
 
 
 
@@ -148,7 +165,7 @@ downloadCache ::
      ( MonadReader c m
      , HasObjectKey c ObjectKey
      , MonadResource m
-     , MonadLogger m
+     , MonadLoggerIO m
      , HasEnv c
      , HasBucketName c BucketName
      )
@@ -191,16 +208,24 @@ downloadCache sink = do
         mHashExpected `onNothing`
         (logAWS LevelError $ "Problem decoding cache's hash value: " <> hashTxt)
       logAWS LevelInfo $ "Restoring cache."
+      reporter <- getInfoLoggerIO
+      let sinkWithProgress =
+            maybe
+              (sink compAlg hashAlg)
+              (\contentSize ->
+                 getProgressReporter reporter (fromInteger contentSize) .| sink compAlg hashAlg)
+              (resp ^. gorsContentLength)
       hashComputed <-
-        liftIO $ runResourceT $ resp ^. gorsBody ^. to _streamBody $$+- sink compAlg hashAlg
+        liftIO $ runResourceT $ resp ^. gorsBody ^. to _streamBody $$+- sinkWithProgress
       if (hashComputed == hashExpected)
         then do
           logAWS LevelInfo "Successfully restored previous cache"
         else do
           logAWS LevelError $
-            "Computed '" <> hashAlgName <> "' hash mismatch: " <> encodeHash hashComputed <>
-            "/=" <>
-            encodeHash hashExpected
+            "Computed '" <> hashAlgName <> "' hash mismatch: '" <> encodeHash hashComputed <>
+            "' /= '" <>
+            encodeHash hashExpected <>
+            "'"
           MaybeT $ return Nothing
 
 
@@ -266,3 +291,44 @@ logAWS ll msg = do
   let ObjectKey objKeyTxt = c ^. objectKey
   logOtherN ll $ "<" <> objKeyTxt <> "> - " <> msg
 
+
+
+reportProgress ::
+     (MonadIO m)
+  => (Word64 -> Word64 -> m a)
+  -> ([(Word64, Word64)], Word64, Word64, UTCTime)
+  -> Word64
+  -> m ([(Word64, Word64)], Word64, Word64, UTCTime)
+reportProgress reporter (thresh, stepSum, prevSum, prevTime) chunkSize
+  | P.null thresh || curSum < curThresh = return (thresh, stepSum + chunkSize, curSum, prevTime)
+  | otherwise = do
+    curTime <- liftIO getCurrentTime
+    let speed = (toInteger (stepSum + chunkSize) % 1) / toRational (diffUTCTime curTime prevTime)
+    _ <- reporter perc $ round (fromRational @Double speed)
+    return (restThresh, 0, curSum, curTime)
+  where
+    curSum = prevSum + chunkSize
+    (perc, curThresh):restThresh = thresh
+
+
+getInfoLoggerIO :: (MonadIO n, MonadLoggerIO m) => m (Text -> n ())
+getInfoLoggerIO = do
+  loggerIO <- askLoggerIO
+  return $ \ txt -> liftIO $ loggerIO defaultLoc "" LevelInfo (toLogStr txt)
+
+
+formatBytes :: Word64 -> Text
+formatBytes = F.sformat (F.bytes @Double (F.fixed 1 F.% " "))
+
+getProgressReporter ::
+     MonadIO m => (Text -> m ()) -> Word64 -> ConduitM S.ByteString S.ByteString m ()
+getProgressReporter reporterTxt totalSize = do
+  let thresh = [(p, (totalSize * p) `div` 100) | p <- [10,20 .. 100]]
+      reporter perc speed =
+        reporterTxt $
+        "Progress: " <> T.pack (show perc) <> "%, speed: " <> formatBytes speed <> "/s"
+      reportProgressAccum chunk acc = do
+        acc' <- reportProgress reporter acc (fromIntegral (S.length chunk))
+        return (acc', chunk)
+  curTime <- liftIO getCurrentTime
+  void $ CL.mapAccumM reportProgressAccum (thresh, 0, 0, curTime)
