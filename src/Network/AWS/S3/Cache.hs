@@ -1,7 +1,7 @@
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
-
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE RecordWildCards       #-}
 -- |
 -- Module      : Network.AWS.S3.Cache
 -- Copyright   : (c) FP Complete 2017
@@ -12,33 +12,36 @@
 --
 module Network.AWS.S3.Cache (
   runCacheS3
+  , cacheS3Version
   , L.LogLevel(..)
   , module Network.AWS.S3.Cache.Types
   ) where
 
 import           Control.Lens
-import           Control.Monad               (when)
+import           Control.Monad                (when)
 import           Control.Monad.Catch
-import           Control.Monad.Logger        as L
+import           Control.Monad.Logger         as L
 import           Control.Monad.Reader
 import           Control.Monad.Trans.AWS
+import           Control.Monad.Trans.Control  (MonadBaseControl)
 import           Control.Monad.Trans.Maybe
-import           Data.Monoid                 ((<>))
-import           Data.Text                   as T
+import           Control.Monad.Trans.Resource (ResourceT)
+import           Data.Monoid                  ((<>))
+import           Data.Text                    as T
 import           Data.Time
+import           Data.Version                 (Version)
 import           Network.AWS.S3.Cache.Local
 import           Network.AWS.S3.Cache.Remote
 import           Network.AWS.S3.Cache.Stack
 import           Network.AWS.S3.Cache.Types
+import qualified Paths_cache_s3               as Paths
 import           System.Exit
 
-import Control.Monad.Trans.Resource (ResourceT)
-import Control.Monad.Trans.Control (MonadBaseControl)
-
--- TODO:
--- * Create new logger instead of modifying anotherone
--- * Formal log level prettier
--- * Add option for turninng off the timestamp
+-- TODO (improvements):
+-- - Create new logger instead of modifying anotherone
+-- - Formal log level prettier
+-- - Add option for turninng off the timestamp
+--
 -- | Filter out min log level events and add a timestamp to all events.
 formatLogger ::
      L.LogLevel -- ^ Minimum log level
@@ -133,3 +136,7 @@ runCacheS3 ca@CommonArgs {..} action = do
     ClearStackWork (ClearStackWorkArgs {..}) -> do
       resolver <- maybe (getStackResolver clearStackWorkYaml) return clearStackWorkResolver
       mkConfig (caStackWorkSuffix resolver) >>= run deleteCache commonVerbosity
+
+
+cacheS3Version :: Version
+cacheS3Version = Paths.version
