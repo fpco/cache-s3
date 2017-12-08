@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
@@ -40,8 +41,6 @@ import           Data.Text.Encoding.Error             as T
 import           Data.Time
 import           Data.Typeable
 import           Data.Word                            (Word64)
-import qualified Formatting                           as F (bytes, fixed,
-                                                            sformat, (%))
 import           Network.AWS
 import           Network.AWS.Data.Body
 import           Network.AWS.Data.Log                 (build)
@@ -54,6 +53,11 @@ import           Network.AWS.S3.Types
 import           Network.HTTP.Types.Status            (status404)
 import           Prelude                              as P
 import           System.IO                            (Handle)
+
+#if !WINDOWS
+import qualified Formatting                           as F (bytes, fixed,
+                                                            sformat, (%))
+#endif
 
 hasCacheChanged ::
      ( MonadReader r m
@@ -327,7 +331,11 @@ getInfoLoggerIO = do
 
 -- | Format bytes into a human readable string
 formatBytes :: Word64 -> Text
+#if WINDOWS
+formatBytes b = T.pack (show b) <> "bytes"
+#else
 formatBytes = F.sformat (F.bytes @Double (F.fixed 1 F.% " "))
+#endif
 
 
 -- | Creates a conduit that will execute supplied action 10 time each for every 10% of the data is
