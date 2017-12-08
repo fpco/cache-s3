@@ -109,4 +109,4 @@ restoreFilesFromCache ::
   -> ConduitM ByteString Void (ResourceT IO) (Digest h)
 restoreFilesFromCache comp _ =
   getDeCompressionConduit comp .|
-  getZipConduit (ZipConduit (untarFinally restoreFile) *> ZipConduit sinkHash)
+  getZipConduit (ZipConduit (untarWithFinalizers restoreFile) *> ZipConduit sinkHash)

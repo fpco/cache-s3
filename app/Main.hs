@@ -14,6 +14,7 @@ import           Network.AWS.S3.Cache
 import           Network.AWS.S3.Types
 import           Options.Applicative
 import           Prelude                    as P
+import           System.Environment
 import           System.IO                  (BufferMode (LineBuffering),
                                              hSetBuffering, stdout)
 import           Text.Read                  (readMaybe)
@@ -53,13 +54,14 @@ readRegion = do
 helpOption :: Parser (a -> a)
 helpOption = abortOption ShowHelpText (long "help" <> short 'h' <> help "Display this message.")
 
-commonArgsParser :: Parser CommonArgs
-commonArgsParser =
+commonArgsParser :: Maybe String -> Parser CommonArgs
+commonArgsParser mS3Bucket =
   CommonArgs <$>
   (BucketName . T.pack <$>
    (strOption
-      (long "bucket" <> short 'b' <>
-       help "Name of the S3 bucket that will be used for caching of local files."))) <*>
+      (long "bucket" <> short 'b' <> metavar "S3_BUCKET" <> maybe mempty value mS3Bucket <>
+       help "Name of the S3 bucket that will be used for caching of local files. \
+            \If S3_BUCKET environment variable is not set, this argument is required."))) <*>
   (option
      (readerMaybe readRegion)
      (long "region" <> short 'r' <> value Nothing <>
@@ -124,17 +126,37 @@ restoreArgsParser =
           \to use cache from 'master' branch by setting --base-branch=master")
 
 
-stackRootArg :: Parser (Maybe String)
+stackRootArg :: Parser (Maybe FilePath)
 stackRootArg =
   option
     (readerMaybe str)
     (long "stack-root" <> value Nothing <> metavar "STACK_ROOT" <>
      help "Global stack directory. Default is taken from stack, i.e a value of \
-          \STACK_ROOT environment variable or a system dependent path: eg.\
+          \STACK_ROOT environment variable or a system dependent path: eg. \
           \~/.stack/ on Linux, C:\\sr on Windows")
 
+
+stackYamlArgParser :: Parser (Maybe FilePath)
+stackYamlArgParser =
+  (option
+     (readerMaybe str)
+     (long "stack-yaml" <> value Nothing <> metavar "STACK_YAML" <>
+      help
+        "Path to stack configuration file. Default is taken from stack: i.e. \
+           \STACK_YAML environment variable or ./stack.yaml"))
+
+
+stackResolverArgParser :: String -> Parser (Maybe Text)
+stackResolverArgParser defStr =
+  option
+    (readerMaybe readText)
+    (long "resolver" <> value Nothing <> metavar "RESOLVER" <>
+     help ("Use a separate namespace for each stack resolver." <> defStr))
+
+
 saveStackArgsParser :: Parser SaveStackArgs
-saveStackArgsParser = SaveStackArgs <$> saveArgsParser many <*> stackRootArg
+saveStackArgsParser =
+  SaveStackArgs <$> saveArgsParser many <*> stackResolverArgParser "" <*> stackRootArg
 
 
 saveStackWorkArgsParser :: Parser SaveStackWorkArgs
@@ -142,13 +164,7 @@ saveStackWorkArgsParser =
   subparser $
   command "work" $
   info
-    (SaveStackWorkArgs <$> saveStackArgsParser <*>
-     (option
-        (readerMaybe str)
-        (long "stack-yaml" <> value Nothing <> metavar "STACK_YAML" <>
-         help
-           "Path to stack configuration file. Default is taken from stack: i.e. \
-           \STACK_YAML environment variable or ./stack.yaml")) <*>
+    (SaveStackWorkArgs <$> saveStackArgsParser <*> stackYamlArgParser <*>
      (option
         (readerMaybe str)
         (long "work-dir" <> value Nothing <> metavar "STACK_WORK" <>
@@ -173,30 +189,37 @@ actionParser =
   (subparser $
    command "restore" $
    info
-     (Restore <$> restoreArgsParser <* helpOption <|> restoreStackCommandParser)
+     (restoreStackCommandParser <|> Restore <$> restoreArgsParser <* helpOption)
      (progDesc "Command for restoring cache from S3 bucket." <> fullDesc)) <|>
   (clearParser
-     Clear
+     (pure Clear)
      "clear"
      "Clears out cache from S3 bucket. This command uses the same arguments as \
      \`cache-s3 save` to uniquely identify the object on S3, therefore same arguments and \
      \subcommands must be suppied in order to clear out the cache created with \
      \`save` command."
      (clearParser
-        ClearStack
+        (ClearStack <$> (ClearStackArgs <$> stackResolverArgParser ""))
         "stack"
         "Clear stack cache"
-        (clearParser ClearStackWork "work" "Clear stack project work cache" A.empty)))
+        (clearParser
+           (ClearStackWork <$>
+            (ClearStackWorkArgs <$>
+             stackResolverArgParser " Default value is inferred from stack.yaml" <*>
+             stackYamlArgParser))
+           "work"
+           "Clear stack project work cache"
+           A.empty)))
   where
-    clearParser tyCon com desc altPreParse =
+    clearParser argsParser com desc altPreParse =
       subparser $
-      command com $ info (altPreParse <|> pure tyCon <* helpOption) (progDesc desc <> fullDesc)
+      command com $ info (altPreParse <|> argsParser <* helpOption) (progDesc desc <> fullDesc)
     saveStackParser = SaveStack <$> saveStackArgsParser <* helpOption
     saveStackCommandParser =
       subparser $
       command "stack" $
       info
-        (saveStackParser <|> SaveStackWork <$> saveStackWorkArgsParser)
+        (SaveStackWork <$> saveStackWorkArgsParser <|> saveStackParser)
         (progDesc
            "Command for caching global stack data in the S3 bucket. This will \
            \include stack root directory and a couple of others that are used \
@@ -204,7 +227,7 @@ actionParser =
            \directory(ies), use `cache-s3 save stack work` instead." <>
          fullDesc)
     restoreStackArgsParser =
-      RestoreStackArgs <$> restoreArgsParser <*>
+      RestoreStackArgs <$> restoreArgsParser <*> stackResolverArgParser "" <*>
       (switch
          (long "upgrade" <>
           help
@@ -215,23 +238,28 @@ actionParser =
       subparser $
       command "stack" $
       info
-        (RestoreStack <$> restoreStackArgsParser <|> restoreStackWorkParser)
+        (restoreStackWorkParser <|>
+         RestoreStack <$> restoreStackArgsParser <* helpOption)
         (progDesc "Command for restoring stack data from the S3 bucket." <> fullDesc)
     restoreStackWorkParser =
       subparser $
       command "work" $
       info
-        (RestoreStackWork <$> restoreArgsParser)
+        (RestoreStackWork <$>
+         (RestoreStackWorkArgs <$> restoreArgsParser <*>
+          stackResolverArgParser " Default value will be taken inferred from stack.yaml" <*>
+          stackYamlArgParser <* helpOption))
         (progDesc "Command for restoring .stack-work directory(ies) from the S3 bucket." <> fullDesc)
 
 
 main :: IO ()
 main = do
+  s3Bucket <- lookupEnv "S3_BUCKET"
   cFile <- credFile
   _args@(Args commonArgs acts) <-
     execParser $
     info
-      (Args <$> commonArgsParser <*> actionParser <*
+      (Args <$> commonArgsParser s3Bucket <*> actionParser <*
        abortOption ShowHelpText (long "help" <> short 'h' <> help "Display this message."))
       (header "cache-s3 - Use AWS S3 bucket as cache for your build environment" <>
        progDesc
@@ -246,3 +274,4 @@ main = do
        fullDesc)
   hSetBuffering stdout LineBuffering
   runCacheS3 commonArgs acts
+  --print _args

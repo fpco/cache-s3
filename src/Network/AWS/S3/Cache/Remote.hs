@@ -136,7 +136,7 @@ uploadCache (hdl, cSize, newHash, comp) = do
               , (compressionMetaKey, getCompressionName comp)
               ]
       logAWS LevelInfo $
-        "Data change detected, caching " <> formatBytes cSize <> " into S3 with " <>
+        "Data change detected, caching " <> formatBytes cSize <> " with " <>
         hashKey <>
         ": " <>
         newHashTxt

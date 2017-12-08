@@ -96,20 +96,23 @@ mkConfig CommonArgs {..} = do
 
 runCacheS3 :: CommonArgs -> Action -> IO ()
 runCacheS3 ca@CommonArgs {..} action = do
-  let stackSuffix = "stack"
-      stackWorkSuffix = stackSuffix <> "-work"
+  let caStackSuffix mRes = ca {commonSuffix = mDot commonSuffix <> mDot mRes <> Just "stack"}
+      caStackWorkSuffix res =
+        ca {commonSuffix = mDot commonSuffix <> Just (res <> ".stack-work")}
+      mDot = ((<> ".") <$>)
   case action of
     Save (SaveArgs {..}) -> do
       config <- mkConfig ca
       saveCache saveHash saveCompression savePaths commonVerbosity config
     SaveStack (SaveStackArgs {..}) -> do
-      stackGlobalPaths <- getStackGlobalPaths stackRoot
-      runCacheS3 (ca {commonSuffix = Just stackSuffix}) $
-        Save saveArgs {savePaths = savePaths saveArgs ++ stackGlobalPaths}
-    SaveStackWork (SaveStackWorkArgs {stackSaveArgs = SaveStackArgs {..}, ..}) -> do
-      stackLocalPaths <- getStackWorkPaths stackRoot stackYaml workDir
-      runCacheS3 (ca {commonSuffix = Just stackWorkSuffix}) $
-        Save saveArgs {savePaths = savePaths saveArgs ++ stackLocalPaths}
+      stackGlobalPaths <- getStackGlobalPaths saveStackRoot
+      runCacheS3 (caStackSuffix saveStackResolver) $
+        Save saveStackArgs {savePaths = savePaths saveStackArgs ++ stackGlobalPaths}
+    SaveStackWork (SaveStackWorkArgs {saveStackWorkArgs = SaveStackArgs {..}, ..}) -> do
+      stackLocalPaths <- getStackWorkPaths saveStackRoot saveStackWorkYaml saveStackWorkDir
+      resolver <- maybe (getStackResolver saveStackWorkYaml) return saveStackResolver
+      runCacheS3 (caStackWorkSuffix resolver) $
+        Save saveStackArgs {savePaths = savePaths saveStackArgs ++ stackLocalPaths}
     Restore (RestoreArgs {..}) -> do
       config <- mkConfig ca
       restoreSuccessfull <- restoreCache commonVerbosity config
@@ -120,11 +123,13 @@ runCacheS3 ca@CommonArgs {..} action = do
         _ -> return ()
     RestoreStack (RestoreStackArgs {..}) -> do
       when restoreStackUpgrade $ upgradeStack restoreStackRoot
-      runCacheS3 (ca {commonSuffix = Just stackSuffix}) (Restore restoreArgs)
-    RestoreStackWork args -> do
-      runCacheS3 (ca {commonSuffix = Just stackWorkSuffix}) (Restore args)
+      runCacheS3 (caStackSuffix restoreStackResolver) (Restore restoreStackArgs)
+    RestoreStackWork (RestoreStackWorkArgs {..}) -> do
+      resolver <- maybe (getStackResolver restoreStackWorkYaml) return restoreStackWorkResolver
+      runCacheS3 (caStackWorkSuffix resolver) (Restore restoreStackWorkArgs)
     Clear -> mkConfig ca >>= run deleteCache commonVerbosity
-    ClearStack ->
-      mkConfig (ca {commonSuffix = Just stackSuffix}) >>= run deleteCache commonVerbosity
-    ClearStackWork ->
-      mkConfig (ca {commonSuffix = Just stackWorkSuffix}) >>= run deleteCache commonVerbosity
+    ClearStack (ClearStackArgs {..}) ->
+      mkConfig (caStackSuffix clearStackResolver) >>= run deleteCache commonVerbosity
+    ClearStackWork (ClearStackWorkArgs {..}) -> do
+      resolver <- maybe (getStackResolver clearStackWorkYaml) return clearStackWorkResolver
+      mkConfig (caStackWorkSuffix resolver) >>= run deleteCache commonVerbosity

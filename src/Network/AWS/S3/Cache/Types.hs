@@ -96,14 +96,15 @@ data SaveArgs = SaveArgs
   } deriving (Show)
 
 data SaveStackArgs = SaveStackArgs
-  { saveArgs  :: !SaveArgs
-  , stackRoot :: !(Maybe FilePath)
+  { saveStackArgs     :: !SaveArgs
+  , saveStackResolver :: !(Maybe Text)
+  , saveStackRoot     :: !(Maybe FilePath)
   } deriving (Show)
 
 data SaveStackWorkArgs = SaveStackWorkArgs
-  { stackSaveArgs :: !SaveStackArgs
-  , stackYaml     :: !(Maybe FilePath)
-  , workDir       :: !(Maybe FilePath)
+  { saveStackWorkArgs :: !SaveStackArgs
+  , saveStackWorkYaml :: !(Maybe FilePath)
+  , saveStackWorkDir  :: !(Maybe FilePath)
   } deriving (Show)
 
 
@@ -113,59 +114,41 @@ data RestoreArgs = RestoreArgs
 
 
 data RestoreStackArgs = RestoreStackArgs
-  { restoreArgs         :: !RestoreArgs
+  { restoreStackArgs     :: !RestoreArgs
+  , restoreStackResolver :: !(Maybe Text)
   -- , restoreStackInstall :: !Bool -- Probably a bit too involved of a feature for too little
   -- benefit
-  , restoreStackUpgrade :: !Bool
-  , restoreStackRoot    :: !(Maybe FilePath)
+  , restoreStackUpgrade  :: !Bool
+  , restoreStackRoot     :: !(Maybe FilePath)
   } deriving (Show)
 
--- All Actions need:
--- * --aws-key (def from env)
--- * --aws-secret (def from env)
--- * --region | -r (def from env)
--- * --bucket-name | -b (required)
--- * --prefix | -p (optional, def no prefix)
--- * --branch (def current branch)
--- * --verbosity | -v (debug, info, warn, error)
--- * --help | -h
--- * --version
+data RestoreStackWorkArgs = RestoreStackWorkArgs
+  { restoreStackWorkArgs     :: !RestoreArgs
+  , restoreStackWorkResolver :: !(Maybe Text)
+  , restoreStackWorkYaml     :: !(Maybe FilePath)
+  } deriving (Show)
+
+
+data ClearStackArgs = ClearStackArgs
+  { clearStackResolver :: !(Maybe Text)
+  } deriving (Show)
+
+data ClearStackWorkArgs = ClearStackWorkArgs
+  { clearStackWorkResolver :: !(Maybe Text)
+  , clearStackWorkYaml     :: !(Maybe FilePath)
+  } deriving (Show)
+
 data Action
-  = Save SaveArgs
-  -- * --paths [path] (or many of --path | -p)
-  -- * --hash | -p (def: SHA256)
-  -- * --compression | -c (def: gzip)
-  | SaveStack SaveStackArgs
-  | SaveStackWork SaveStackWorkArgs
-  -- | Same as Save plus:
-  -- * (local|global)
-  -- * --work-dir (def STACK_WORK -> .stack-work)
-  -- * --stack-root (def STACK_ROOT -> call `stack path`)
-  -- * --stack-yaml (def STACK_YAML -> call `stack path --config-location` -> stack.yaml)
-  | Restore RestoreArgs
-  -- * --base-branch (def master)
-  | RestoreStack RestoreStackArgs
-  | RestoreStackWork RestoreArgs
-  -- | Same as restore
-  -- * --upgrade (try to upgrade stack if there is new version uvailable)
-  -- * --install (try to install stack if it is missing)
+  = Save !SaveArgs
+  | SaveStack !SaveStackArgs
+  | SaveStackWork !SaveStackWorkArgs
+  | Restore !RestoreArgs
+  | RestoreStack !RestoreStackArgs
+  | RestoreStackWork !RestoreStackWorkArgs
   | Clear
-  | ClearStack
-  | ClearStackWork
+  | ClearStack !ClearStackArgs
+  | ClearStackWork !ClearStackWorkArgs
   deriving (Show)
-
-
--- cache-s3 -b foo save stack --stack-root
--- cache-s3 -b foo save stack work-dir --stack-yaml --work-dir
-
--- cache-s3 -b foo restore stack
--- cache-s3 -b foo restore stack work-dir
-
-
--- STACK:
--- stack-root: /home/lehins/.stack
--- project-root: /home/lehins/fpco/iohk/cache-s3
--- config-location: /home/lehins/fpco/iohk/cache-s3/stack.yaml
 
 
 -- | Same as `withHashAlgorithm`, but accepts an extra function to be invoked when unsupported hash
