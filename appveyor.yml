@@ -32,7 +32,6 @@ test_script:
   - stack install
       -j 2
       --no-terminal
-      --local-bin-path %WORK_DIR%
       --work-dir %STACK_WORK%
 
 
