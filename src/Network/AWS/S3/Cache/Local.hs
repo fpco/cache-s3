@@ -16,10 +16,9 @@ module Network.AWS.S3.Cache.Local where
 
 import           Control.Monad                (void)
 import           Control.Monad.Catch          (MonadCatch)
-import           Control.Monad.IO.Class
+import           Control.Monad.IO.Class       (liftIO)
 import           Control.Monad.Logger
-import           Control.Monad.Reader
-import           Control.Monad.Trans.Resource
+import           Control.Monad.Trans.Resource (MonadResource, ResourceT)
 import           Crypto.Hash                  (Digest, HashAlgorithm)
 import           Crypto.Hash.Conduit
 import           Data.ByteString              as S
@@ -27,7 +26,6 @@ import           Data.Conduit
 import           Data.Conduit.Binary
 import           Data.Conduit.List            as C
 import           Data.Conduit.Tar
-import           Data.Conduit.Zlib
 import           Data.List                    as L
 import           Data.Monoid                  ((<>))
 import           Data.Text                    as T
@@ -38,7 +36,6 @@ import           Prelude                      as P
 import           System.Directory
 import           System.IO                    hiding (openTempFile)
 import           System.IO.Temp
-import qualified Data.Conduit.LZ4 as LZ4
 
 tarFiles :: (MonadCatch m, MonadResource m, MonadLogger m) =>
             [FilePath] -> ConduitM a ByteString m ()
@@ -60,18 +57,6 @@ tarFiles dirs = do
 removePrefixSorted :: Eq a => [[a]] -> [[a]]
 removePrefixSorted []     = []
 removePrefixSorted (x:xs) = x : L.filter (not . (x `L.isPrefixOf`)) xs
-
-
-getCompressionConduit :: MonadResource m =>
-                         Compression -> Conduit ByteString m ByteString
-getCompressionConduit GZip = gzip
-getCompressionConduit LZ4  = LZ4.compress Nothing
-
-
-getDeCompressionConduit :: MonadResource m =>
-                           Compression -> Conduit ByteString m ByteString
-getDeCompressionConduit GZip = ungzip
-getDeCompressionConduit LZ4  = LZ4.decompress
 
 
 prepareCache ::

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                    #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
@@ -16,21 +17,22 @@
 module Network.AWS.S3.Cache.Types where
 
 import           Control.Lens
-import           Control.Monad.Logger as L
+import           Control.Monad.Logger         as L
+import           Control.Monad.Trans.Resource (MonadResource)
 import           Crypto.Hash
-import           Data.Maybe           (fromMaybe)
-import           Data.Monoid          ((<>))
-import           Data.Text            as T
+import           Data.ByteString              (ByteString)
+import           Data.Conduit                 (Conduit)
+import           Data.Conduit.Zlib
+import           Data.Maybe                   (fromMaybe)
+import           Data.Monoid                  ((<>))
+import           Data.Text                    as T
 import           Data.Typeable
 import           Network.AWS.Env
 import           Network.AWS.S3.Types
 
-data Compression
-  = GZip
-  | LZ4
-  deriving (Show, Eq)
-
-data Hashing
+#if !WINDOWS
+import qualified Data.Conduit.LZ4             as LZ4
+#endif
 
 data Config =
   Config
@@ -55,27 +57,6 @@ mkObjectKey mPrefix mBranchName mSuffix =
   ObjectKey $
   "cache-s3/" <> maybe "" (<> "/") mPrefix <> fromMaybe "" mBranchName <> maybe "" ("." <>) mSuffix <>
   ".cache"
-
-
-hashAlgorithmMetaKey :: Text
-hashAlgorithmMetaKey = "hash"
-
-getHashMetaKey :: Typeable h => proxy h -> Text
-getHashMetaKey hashProxy = T.toLower (T.pack (showsTypeRep (typeRep hashProxy) ""))
-
-
-compressionMetaKey :: Text
-compressionMetaKey = "compression"
-
-getCompressionName :: Compression -> Text
-getCompressionName = T.toLower . T.pack . show
-
-readCompression :: Text -> Maybe Compression
-readCompression compTxt =
-  case T.toLower compTxt of
-    "gzip" -> Just GZip
-    "lz4"  -> Just LZ4
-    _      -> Nothing
 
 
 data CommonArgs = CommonArgs
@@ -150,6 +131,18 @@ data Action
   | ClearStackWork !ClearStackWorkArgs
   deriving (Show)
 
+
+
+---------------
+--- Hashing ---
+---------------
+
+
+hashAlgorithmMetaKey :: Text
+hashAlgorithmMetaKey = "hash"
+
+getHashMetaKey :: Typeable h => proxy h -> Text
+getHashMetaKey hashProxy = T.toLower (T.pack (showsTypeRep (typeRep hashProxy) ""))
 
 -- | Same as `withHashAlgorithm`, but accepts an extra function to be invoked when unsupported hash
 -- algorithm name is supplied that also returns a default value.
@@ -228,3 +221,52 @@ withHashAlgorithm hTxt action = do
         Left e2   -> return $ Left (e1 <> e2)
         Right res -> return $ Right res
     Right res -> return $ Right res
+
+
+-------------------
+--- Compression ---
+-------------------
+
+data Compression
+  = GZip
+#if !WINDOWS
+  | LZ4
+#endif
+  deriving (Show, Eq, Enum)
+
+
+getCompressionConduit :: MonadResource m =>
+                         Compression -> Conduit ByteString m ByteString
+getCompressionConduit GZip = gzip
+#if !WINDOWS
+getCompressionConduit LZ4  = LZ4.compress Nothing
+#endif
+
+
+getDeCompressionConduit :: MonadResource m =>
+                           Compression -> Conduit ByteString m ByteString
+getDeCompressionConduit GZip = ungzip
+#if !WINDOWS
+getDeCompressionConduit LZ4  = LZ4.decompress
+#endif
+
+
+compressionMetaKey :: Text
+compressionMetaKey = "compression"
+
+getCompressionName :: Compression -> Text
+getCompressionName = T.toLower . T.pack . show
+
+supportedCompression :: Text
+supportedCompression = T.intercalate ", " $ getCompressionName <$> enumFrom GZip
+
+readCompression :: Text -> Maybe Compression
+readCompression compTxt =
+  case T.toLower compTxt of
+    "gzip" -> Just GZip
+#if !WINDOWS
+    "lz4"  -> Just LZ4
+#endif
+    _      -> Nothing
+
+

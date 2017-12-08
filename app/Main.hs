@@ -112,7 +112,10 @@ saveArgsParser paths =
       help "Hashing algorithm to use for cache validation")) <*>
   option
     (maybeReader (readCompression . T.pack))
-    (long "compression" <> short 'c' <> value GZip <> help "Compression algorithm to use for cache")
+    (long "compression" <> short 'c' <> value GZip <>
+     help
+       ("Compression algorithm to use for cache. Default 'gzip'. Supported: " <>
+        T.unpack supportedCompression))
 
 
 restoreArgsParser :: Parser RestoreArgs

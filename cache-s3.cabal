@@ -39,7 +39,6 @@ library
                      , git
                      , http-types
                      , lens
-                     , lz4-conduit
                      , memory
                      , monad-control
                      , monad-logger
@@ -56,6 +55,10 @@ library
                      , yaml
   default-language:    Haskell2010
   ghc-options:         -Wall
+  if os(windows)
+      cpp-options:   -DWINDOWS
+  else
+      build-depends: lz4-conduit
 
 executable cache-s3
   hs-source-dirs:      app
