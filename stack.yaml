@@ -1,7 +1,11 @@
 resolver: lts-9.14
 packages:
 - .
-- ../tar-conduit
+#- ../tar-conduit
+- location:
+    git: https://github.com/lehins/tar-conduit
+    commit: ed9f3c5e5f4f9cf9b7d8d3cc7757d3fb4738d921
+  extra-dep: true
 extra-deps:
 - temporary-resourcet-0.1.0.0
 - lz4-conduit-0.2
