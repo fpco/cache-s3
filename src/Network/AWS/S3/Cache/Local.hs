@@ -22,6 +22,7 @@ import           Control.Monad.Trans.Resource (MonadResource, ResourceT)
 import           Crypto.Hash                  (Digest, HashAlgorithm)
 import           Crypto.Hash.Conduit
 import           Data.ByteString              as S
+import           Data.ByteString.Char8        as S8
 import           Data.Conduit
 import           Data.Conduit.Binary
 import           Data.Conduit.List            as C
@@ -94,4 +95,10 @@ restoreFilesFromCache ::
   -> ConduitM ByteString Void (ResourceT IO) (Digest h)
 restoreFilesFromCache comp _ =
   getDeCompressionConduit comp .|
-  getZipConduit (ZipConduit (untarWithFinalizers restoreFile) *> ZipConduit sinkHash)
+  getZipConduit (ZipConduit (untarWithFinalizers restoreFile') *> ZipConduit sinkHash)
+  where
+    restoreFile' fi = do
+      case fileType fi of
+        FTDirectory -> liftIO $ createDirectoryIfMissing True (S8.unpack (filePath fi))
+        _ -> return ()
+      restoreFile fi
