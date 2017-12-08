@@ -44,17 +44,13 @@ library
                      , monad-control
                      , monad-logger
                      , mtl
-                     , path
-                     , path-io
                      , process
                      , resourcet
-                     , safe-exceptions
                      , tar-conduit
                      , temporary-resourcet
                      , text
                      , time
                      , transformers >= 0.5.2.0
-                     , unix
                      , unordered-containers
                      , vector >= 0.12.0.0
                      , yaml
