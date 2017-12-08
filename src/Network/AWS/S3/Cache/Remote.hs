@@ -352,3 +352,6 @@ getProgressReporter reporterTxt totalSize = do
         return (acc', chunk)
   curTime <- liftIO getCurrentTime
   void $ CL.mapAccumM reportProgressAccum (thresh, 0, 0, curTime)
+
+
+

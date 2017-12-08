@@ -22,7 +22,7 @@ before_test:
 - 7z x stack.zip stack.exe
 
 # Try to restore cache
-- ps: Start-FileDownload https://s3.amazonaws.com/lehins-ci-cache/cache-s3_windows-x86_64.exe -FileName cache-s3.exe
+- ps: Start-FileDownload https://s3.amazonaws.com/lehins-ci-cache/cache-s3.exe -FileName cache-s3.exe
 - cache-s3.exe --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug restore stack --base-branch=master
 - cache-s3.exe --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug restore stack work --base-branch=master
 
