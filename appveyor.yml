@@ -37,8 +37,8 @@ test_script:
 
 
 after_test:
-- cache-s3.exe --prefix=cache-s3 --suffix=windows -v debug save stack
-- cache-s3.exe --prefix=cache-s3 --suffix=windows -v debug save stack work
+- stack exec -- cache-s3 --prefix=cache-s3 --suffix=windows -v debug save stack
+- stack exec -- cache-s3 --prefix=cache-s3 --suffix=windows -v debug save stack work
 
 notifications:
   - provider: Email
