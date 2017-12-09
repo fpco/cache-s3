@@ -354,4 +354,8 @@ getProgressReporter reporterTxt totalSize = do
   void $ CL.mapAccumM reportProgressAccum (thresh, 0, 0, curTime)
 
 
+_prog :: Int -> (String, Double)
+_prog val =
+    head $ dropWhile (\(_, sv) -> sv >= 1024) $ map (\(n, t) -> (n, fromIntegral val / t)) $
+    zip ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"] [2 ^ (x * 10) | x <- [0 :: Int ..]]
 
