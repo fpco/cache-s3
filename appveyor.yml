@@ -55,7 +55,7 @@ after_test:
 #         }
 #         stack.exe exec -- cache-s3 --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug save stack work
 #     }
-- stack exec -- cache-s3 --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug save stack --base-branch=master
+- stack exec -- cache-s3 --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug save stack
 - stack exec -- cache-s3 --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug save stack work
 
 notifications:
