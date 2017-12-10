@@ -37,9 +37,9 @@ before_test:
 
 
 - ps: Start-FileDownload https://s3.amazonaws.com/lehins-ci-cache/cache-s3.exe -FileName cache-s3.exe
-# - 7z x cache-s3.zip cache-s3.exe
-- ps: cache-s3.exe --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug restore stack --base-branch=master
-- ps: cache-s3.exe --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug restore stack work --base-branch=master
+# - 7z. x cache-s3.zip cache-s3.exe
+- ps: .\cache-s3.exe --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug restore stack --base-branch=master
+- ps: .\cache-s3.exe --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug restore stack work --base-branch=master
 
 # - if exist %APPDATA%\local\bin\cache-s3.exe stack exec -- cache-s3.exe --prefix=cache-s3 --suffix=windows -v debug restore stack --base-branch=master
 # - if exist %APPDATA%\local\bin\cache-s3.exe stack exec -- cache-s3.exe --prefix=cache-s3 --suffix=windows -v debug restore stack work --base-branch=master
