@@ -140,14 +140,14 @@ uploadCache (hdl, cSize, newHash, comp) = do
               , (compressionMetaKey, getCompressionName comp)
               ]
       logAWS LevelInfo $
-        "Data change detected, caching " <> formatBytes (fromIntegral cSize) <> " with " <>
-        hashKey <>
+        "Data change detected, caching " <> formatBytes (fromIntegral cSize) <> " with " <> hashKey <>
         ": " <>
         newHashTxt
       reporter <- getInfoLoggerIO
       runLoggingAWS_ $
         runConduit $
-        sourceHandle hdl .| passthroughSink (streamUpload (Just 1024) cmu) (void . pure) .|
+        sourceHandle hdl .|
+        passthroughSink (streamUpload (Just (100 * 2 ^ (20 :: Int))) cmu) (void . pure) .|
         getProgressReporter reporter cSize .|
         sinkNull
       logAWS LevelInfo $ "Finished uploading. Files are cached on S3."
