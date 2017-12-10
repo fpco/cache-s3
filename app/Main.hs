@@ -2,22 +2,23 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
-import           Control.Applicative        as A
-import           Data.Attoparsec.Text       (parseOnly)
+import           Control.Applicative  as A
+import           Data.Attoparsec.Text (parseOnly)
 import           Data.Maybe
-import           Data.Monoid                ((<>))
-import           Data.Text                  as T
-import           Network.AWS                hiding (LogLevel)
+import           Data.Monoid          ((<>))
+import           Data.Text            as T
+import           Data.Version         (Version, showVersion)
+import           Network.AWS          hiding (LogLevel)
 import           Network.AWS.Auth
 import           Network.AWS.Data
 import           Network.AWS.S3.Cache
 import           Network.AWS.S3.Types
 import           Options.Applicative
-import           Prelude                    as P
+import           Prelude              as P
 import           System.Environment
-import           System.IO                  (BufferMode (LineBuffering),
-                                             hSetBuffering, stdout)
-import           Text.Read                  (readMaybe)
+import           System.IO            (BufferMode (LineBuffering),
+                                       hSetBuffering, stdout)
+import           Text.Read            (readMaybe)
 
 readerMaybe :: ReadM a -> ReadM (Maybe a)
 readerMaybe reader = (Just <$> reader) <|> pure Nothing
@@ -54,13 +55,14 @@ readRegion = do
 helpOption :: Parser (a -> a)
 helpOption = abortOption ShowHelpText (long "help" <> short 'h' <> help "Display this message.")
 
-commonArgsParser :: Maybe String -> Parser CommonArgs
-commonArgsParser mS3Bucket =
+commonArgsParser :: Version -> Maybe String -> Parser CommonArgs
+commonArgsParser version mS3Bucket =
   CommonArgs <$>
   (BucketName . T.pack <$>
    (strOption
       (long "bucket" <> short 'b' <> metavar "S3_BUCKET" <> maybe mempty value mS3Bucket <>
-       help "Name of the S3 bucket that will be used for caching of local files. \
+       help
+         "Name of the S3 bucket that will be used for caching of local files. \
             \If S3_BUCKET environment variable is not set, this argument is required."))) <*>
   (option
      (readerMaybe readRegion)
@@ -99,7 +101,10 @@ commonArgsParser mS3Bucket =
   (option
      readLogLevel
      (long "verbosity" <> short 'v' <> value LevelInfo <>
-      help ("Verbosity level (debug|info|warn|error). Default level is 'info'.")))
+      help "Verbosity level (debug|info|warn|error). Default level is 'info'.")) <*
+  (infoOption
+     ("cache-s3-" <> showVersion version)
+     (long "version" <> help "Print current verison of the program."))
 
 
 saveArgsParser :: (Parser FilePath -> Parser [FilePath]) -> Parser SaveArgs
@@ -262,7 +267,7 @@ main = do
   _args@(Args commonArgs acts) <-
     execParser $
     info
-      (Args <$> commonArgsParser s3Bucket <*> actionParser <*
+      (Args <$> commonArgsParser cacheS3Version s3Bucket <*> actionParser <*
        abortOption ShowHelpText (long "help" <> short 'h' <> help "Display this message."))
       (header "cache-s3 - Use AWS S3 bucket as cache for your build environment" <>
        progDesc

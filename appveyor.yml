@@ -57,16 +57,15 @@ after_test:
 - stack exec -- cache-s3 --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug save stack
 - stack exec -- cache-s3 --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug save stack work
 - ps: >-
-    if (-not $env:APPVEYOR_REPO_TAG) {
+    if ($env:APPVEYOR_REPO_TAG) {
       cp %APPDATA%\local\bin\cache-s3.exe cache-s3.exe
       7z a cache-s3.zip cache-s3.exe
-      github-release upload --token $env:GITHUB_TOKEN --owner lehins --repo cache-s3 --file cache-s3.zip --name test-release --tag=0.1.0.test
+      github-release upload --token $env:GITHUB_TOKEN --owner lehins --repo cache-s3 --file cache-s3.zip --name test-release --tag $env:APPVEYOR_REPO_TAG_NAME --name cache-s3-$env:APPVEYOR_REPO_TAG_NAME-windows_x64-86.zip
     }
 - ps: >-
     if (-not $env:APPVEYOR_PULL_REQUEST_NUMBER ) {
       echo "Not a PR"
     }
-# --tag $env:APPVEYOR_REPO_TAG_NAME
 notifications:
   - provider: Email
     to:

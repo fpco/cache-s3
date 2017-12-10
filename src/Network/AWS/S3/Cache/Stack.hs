@@ -37,7 +37,8 @@ getStackPath args pName =
 getStackGlobalPaths :: Maybe FilePath -- ^ Stack root directory
                     -> IO [FilePath]
 getStackGlobalPaths mStackRoot = do
-  mapM (getStackPath (getStackRootArg mStackRoot)) ["--stack-root", "--local-bin", "--programs"]
+  mapM (getStackPath (getStackRootArg mStackRoot)) ["--stack-root", "--programs"]
+  --"--local-bin"] -- turned off since a binary will change even if source didn't
 
 
 getStackResolver :: Maybe FilePath -> IO T.Text
