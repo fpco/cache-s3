@@ -56,6 +56,7 @@ after_test:
       }
       stack exec -- cache-s3 --prefix=$env:APPVEYOR_PROJECT_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows -v debug save stack work
     }
+# Make a release on every git tag
 - ps: >-
     if ($env:APPVEYOR_REPO_TAG_NAME) {
       Start-FileDownload https://github.com/tfausak/github-release/releases/download/$env:GITHUB_RELEASE_VERSION/github-release-$env:GITHUB_RELEASE_VERSION-windows.zip -FileName github-release.zip
