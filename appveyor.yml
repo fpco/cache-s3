@@ -9,7 +9,6 @@ environment:
     STACK_ROOT: 'c:\s'
     STACK_WORK: '.w'
     WORK_DIR: 'c:\w'
-    CACHE_S3_PATH: 'C:\Tools\cache-s3'
 
 
 before_test:
@@ -30,9 +29,6 @@ before_test:
 
 - ps: Start-FileDownload https://s3.amazonaws.com/lehins-ci-cache/cache-s3.exe -FileName cache-s3.zip
 # - 7z x cache-s3.zip cache-s3.exe
-- mkdir %CACHE_S3_PATH%
-- ps: '$env:Path += ";%CACHE_S3_PATH%"'
-- mv cache-s3.exe %CACHE_S3_PATH%\cache-s3.exe
 - cache-s3 --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug restore stack --base-branch=master
 - cache-s3 --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug restore stack work --base-branch=master
 
