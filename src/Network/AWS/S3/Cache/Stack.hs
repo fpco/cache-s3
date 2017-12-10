@@ -45,7 +45,9 @@ getStackGlobalPaths mStackRoot = do
 getStackResolver :: StackProject -> IO T.Text
 getStackResolver (StackProject { stackResolver = Just resolver }) = return resolver
 getStackResolver (StackProject { stackYaml = mStackYaml }) = do
-  stackYaml <- getStackYaml [] mStackYaml
+  stackYaml <- case mStackYaml of
+    Just stackYaml -> return stackYaml
+    Nothing -> fromMaybe "stack.yaml" <$> lookupEnv "STACK_YAML"
   eObj <- decodeFileEither stackYaml
   case eObj of
     Left exc -> throwIO exc
@@ -61,7 +63,9 @@ getStackYaml :: [String] -> Maybe FilePath -> IO FilePath
 getStackYaml args mStackYaml =
   case mStackYaml of
     Just stackYaml -> return stackYaml
-    Nothing        -> getStackPath args "--config-location"
+    Nothing        -> do
+
+      getStackPath args "--config-location"
 
 
 getStackWorkPaths :: Maybe FilePath -- ^ Stack root. It is needed in order to prevent stack from
