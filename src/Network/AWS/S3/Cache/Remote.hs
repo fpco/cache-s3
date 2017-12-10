@@ -226,16 +226,16 @@ downloadCache sink = do
       hashExpected <-
         mHashExpected `onNothing`
         (logAWS LevelError $ "Problem decoding cache's hash value: " <> hashTxt)
-      logAWS LevelInfo $ "Restoring cache."
+      len <-
+        (resp ^. gorsContentLength) `onNothing`
+        logAWS LevelError "Did not receive expected cache size form AWS"
+      logAWS LevelInfo $ "Restoring cache with total size: " <> formatBytes len
       reporter <- getInfoLoggerIO
-      let sinkWithProgress =
-            maybe
-              (sink compAlg hashAlg)
-              (\contentSize ->
-                 getProgressReporter reporter (fromInteger contentSize) .| sink compAlg hashAlg)
-              (resp ^. gorsContentLength)
       hashComputed <-
-        liftIO $ runResourceT $ resp ^. gorsBody ^. to _streamBody $$+- sinkWithProgress
+        liftIO $
+        runResourceT $
+        resp ^. gorsBody ^. to _streamBody $$+-
+        (getProgressReporter reporter (fromInteger len) .| sink compAlg hashAlg)
       if (hashComputed == hashExpected)
         then do
           logAWS LevelInfo "Successfully restored previous cache"
