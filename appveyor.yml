@@ -16,10 +16,19 @@ before_test:
 - xcopy /q /s /e /r /k /i /v /h /y C:\projects\cache-s3 "%WORK_DIR%"
 - cd "%WORK_DIR%"
 
+- ps: >-
+    if (-not $env:APPVEYOR_PULL_REQUEST_NUMBER ) {
+        if ($env:APPVEYOR_REPO_BRANCH -eq "master" ) {
+          echo "It is master"
+        }
+    }
 
 # Install stack
+- mkdir %APPDATA%\local\bin\
+- $env:Path += ";%APPDATA%\local\bin"
 - ps: Start-FileDownload http://www.stackage.org/stack/windows-x86_64 -FileName stack.zip
 - 7z x stack.zip stack.exe
+- mv stack.exe %APPDATA%\local\bin\stack.exe
 
 # Try to restore cache
 # - ps: Start-FileDownload https://s3.amazonaws.com/lehins-ci-cache/cache-s3.exe -FileName cache-s3.exe
@@ -49,9 +58,9 @@ after_test:
 # - ps: >-
 #     if (-not $env:APPVEYOR_PULL_REQUEST_NUMBER ) {
 #         if ($env:APPVEYOR_REPO_BRANCH -eq "master" ) {
-#             stack.exe exec -- cache-s3 --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug save stack --base-branch=master
+#             stack exec -- cache-s3 --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug save stack --base-branch=master
 #         }
-#         stack.exe exec -- cache-s3 --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug save stack work
+#         stack exec -- cache-s3 --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug save stack work
 #     }
 - stack install github-release
 - stack exec -- cache-s3 --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug save stack
