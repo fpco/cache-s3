@@ -16,12 +16,12 @@ before_test:
 - xcopy /q /s /e /r /k /i /v /h /y C:\projects\cache-s3 "%WORK_DIR%"
 - cd "%WORK_DIR%"
 
-- ps: >-
-    if (-not $env:APPVEYOR_PULL_REQUEST_NUMBER ) {
-        if ($env:APPVEYOR_REPO_BRANCH -eq "master" ) {
-          echo "It is master"
-        }
-    }
+# - ps: >-
+#     if (-not $env:APPVEYOR_PULL_REQUEST_NUMBER ) {
+#         if ($env:APPVEYOR_REPO_BRANCH -eq "master" ) {
+#           echo "It is master"
+#         }
+#     }
 
 # Install stack
 - mkdir %APPDATA%\local\bin\
@@ -62,18 +62,19 @@ after_test:
 #         }
 #         stack exec -- cache-s3 --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug save stack work
 #     }
-- stack install github-release
 - ps: >-
     if (-not $env:APPVEYOR_PULL_REQUEST_NUMBER ) {
       if ($env:APPVEYOR_REPO_BRANCH -eq "master" ) {
-        stack exec -- cache-s3 --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug save stack
+        stack exec -- cache-s3 --prefix=$env:APPVEYOR_PROJECT_NAME --suffix=windows -v debug save stack
       }
     }
 #- stack exec -- cache-s3 --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug save stack
 - stack exec -- cache-s3 --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug save stack work
 - ps: >-
     if ($env:APPVEYOR_REPO_TAG) {
-      cp %APPDATA%\local\bin\cache-s3.exe cache-s3.exe
+      Start-FileDownload https://github.com/tfausak/github-release/releases/download/$env:GITHUB_RELEASE_VERSION/github-release-$env:GITHUB_RELEASE_VERSION-windows.zip -FileName github-release.zip
+      7z x github-release.zip github-release.exe
+      cp $env:APPDATA\local\bin\cache-s3.exe cache-s3.exe
       7z a cache-s3.zip cache-s3.exe
       github-release upload --token $env:GITHUB_TOKEN --owner lehins --repo cache-s3 --file cache-s3.zip --name test-release --tag $env:APPVEYOR_REPO_TAG_NAME --name cache-s3-$env:APPVEYOR_REPO_TAG_NAME-windows_x64-86.zip
     }
