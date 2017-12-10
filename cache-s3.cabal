@@ -59,7 +59,6 @@ library
       cpp-options:   -DWINDOWS
   else
       build-depends: lz4-conduit
-                   , formatting
 
 
 executable cache-s3

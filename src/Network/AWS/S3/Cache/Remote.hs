@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
@@ -34,6 +33,7 @@ import           Data.Conduit.Binary
 import           Data.Conduit.List                    as CL
 import           Data.HashMap.Strict                  as HM
 import           Data.Monoid                          ((<>))
+import Data.Maybe
 import           Data.Ratio                           ((%))
 import           Data.Text                            as T
 import           Data.Text.Encoding                   as T
@@ -54,10 +54,10 @@ import           Network.HTTP.Types.Status            (status404)
 import           Prelude                              as P
 import           System.IO                            (Handle)
 
-#if !WINDOWS
-import qualified Formatting                           as F (bytes, fixed,
-                                                            sformat, (%))
-#endif
+-- #if !WINDOWS
+-- import qualified Formatting                           as F (bytes, fixed,
+--                                                             sformat, (%))
+-- #endif
 
 hasCacheChanged ::
      ( MonadReader r m
@@ -140,7 +140,7 @@ uploadCache (hdl, cSize, newHash, comp) = do
               , (compressionMetaKey, getCompressionName comp)
               ]
       logAWS LevelInfo $
-        "Data change detected, caching " <> formatBytes cSize <> " with " <>
+        "Data change detected, caching " <> formatBytes (fromIntegral cSize) <> " with " <>
         hashKey <>
         ": " <>
         newHashTxt
@@ -329,15 +329,6 @@ getInfoLoggerIO = do
   return $ \ txt -> liftIO $ loggerIO defaultLoc "" LevelInfo (toLogStr txt)
 
 
--- | Format bytes into a human readable string
-formatBytes :: Word64 -> Text
-#if WINDOWS
-formatBytes b = T.pack (show b) <> "bytes"
-#else
-formatBytes = F.sformat (F.bytes @Double (F.fixed 1 F.% " "))
-#endif
-
-
 -- | Creates a conduit that will execute supplied action 10 time each for every 10% of the data is
 -- being passed through it. Supplied action will receive `Text` with status and speed of processing.
 getProgressReporter ::
@@ -346,7 +337,8 @@ getProgressReporter reporterTxt totalSize = do
   let thresh = [(p, (totalSize * p) `div` 100) | p <- [10,20 .. 100]]
       reporter perc speed =
         reporterTxt $
-        "Progress: " <> T.pack (show perc) <> "%, speed: " <> formatBytes speed <> "/s"
+        "Progress: " <> T.pack (show perc) <> "%, speed: " <> formatBytes (fromIntegral speed) <>
+        "/s"
       reportProgressAccum chunk acc = do
         acc' <- reportProgress reporter acc (fromIntegral (S.length chunk))
         return (acc', chunk)
@@ -354,8 +346,20 @@ getProgressReporter reporterTxt totalSize = do
   void $ CL.mapAccumM reportProgressAccum (thresh, 0, 0, curTime)
 
 
--- _prog :: Int -> (String, Double)
--- _prog val =
---     head $ dropWhile (\(_, sv) -> sv >= 1024) $ map (\(n, t) -> (n, fromIntegral val / t)) $
---     zip ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"] [2 ^ (x * 10) | x <- [0 :: Int ..]]
-
+formatBytes :: Integer -> Text
+formatBytes val =
+  fmt $ fromMaybe (P.last scaled) $ listToMaybe $ P.dropWhile ((>= 10240) . fst) $ scaled
+  where
+    fmt (sVal10, n) =
+      (\(d, m) -> T.pack (show d) <> "." <> T.pack (show m)) (sVal10 `divMod` 10) <> " " <> n
+    val10 = 10 * val
+    scale (s, r) =
+      s +
+      if r < 512
+        then 0
+        else 1
+    scaled =
+      P.map (\(t, abbr) -> (scale (val10 `divMod` t), abbr)) $
+      P.zip
+        [2 ^ (x * 10) | x <- [0 :: Int ..]]
+        ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"]
