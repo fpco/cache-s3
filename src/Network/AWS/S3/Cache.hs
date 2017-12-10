@@ -99,21 +99,23 @@ mkConfig CommonArgs {..} = do
 
 runCacheS3 :: CommonArgs -> Action -> IO ()
 runCacheS3 ca@CommonArgs {..} action = do
-  let caStackSuffix mRes = ca {commonSuffix = mDot commonSuffix <> mDot mRes <> Just "stack"}
-      caStackWorkSuffix res =
-        ca {commonSuffix = mDot commonSuffix <> Just (res <> ".stack-work")}
-      mDot = ((<> ".") <$>)
+  let caAddSuffix suf = ca {commonSuffix = ((<> ".") <$> commonSuffix) <> Just suf}
+      caStackSuffix res = caAddSuffix (res <> ".stack")
+      caStackWorkSuffix res = caAddSuffix (res <> ".stack-work")
   case action of
     Save (SaveArgs {..}) -> do
       config <- mkConfig ca
       saveCache saveHash saveCompression savePaths commonVerbosity config
     SaveStack (SaveStackArgs {..}) -> do
       stackGlobalPaths <- getStackGlobalPaths saveStackRoot
-      runCacheS3 (caStackSuffix saveStackResolver) $
+      resolver <- getStackResolver saveStackProject
+      runCacheS3 (caStackSuffix resolver) $
         Save saveStackArgs {savePaths = savePaths saveStackArgs ++ stackGlobalPaths}
-    SaveStackWork (SaveStackWorkArgs {saveStackWorkArgs = SaveStackArgs {..}, ..}) -> do
-      stackLocalPaths <- getStackWorkPaths saveStackRoot saveStackWorkYaml saveStackWorkDir
-      resolver <- maybe (getStackResolver saveStackWorkYaml) return saveStackResolver
+    SaveStackWork (SaveStackWorkArgs {..}) -> do
+      let SaveStackArgs {..} = saveStackWorkArgs
+          StackProject {..} = saveStackProject
+      stackLocalPaths <- getStackWorkPaths saveStackRoot stackYaml saveStackWorkDir
+      resolver <- getStackResolver saveStackProject
       runCacheS3 (caStackWorkSuffix resolver) $
         Save saveStackArgs {savePaths = savePaths saveStackArgs ++ stackLocalPaths}
     Restore (RestoreArgs {..}) -> do
@@ -125,16 +127,17 @@ runCacheS3 ca@CommonArgs {..} action = do
           void $ restoreCache commonVerbosity $ Config commonBucket baseObjKey (config ^. confEnv)
         _ -> return ()
     RestoreStack (RestoreStackArgs {..}) -> do
-      when restoreStackUpgrade $ upgradeStack restoreStackRoot
-      runCacheS3 (caStackSuffix restoreStackResolver) (Restore restoreStackArgs)
-    RestoreStackWork (RestoreStackWorkArgs {..}) -> do
-      resolver <- maybe (getStackResolver restoreStackWorkYaml) return restoreStackWorkResolver
-      runCacheS3 (caStackWorkSuffix resolver) (Restore restoreStackWorkArgs)
+      resolver <- getStackResolver restoreStackProject
+      runCacheS3 (caStackSuffix resolver) (Restore restoreStackArgs)
+    RestoreStackWork (RestoreStackArgs {..}) -> do
+      resolver <- getStackResolver restoreStackProject
+      runCacheS3 (caStackWorkSuffix resolver) (Restore restoreStackArgs)
     Clear -> mkConfig ca >>= run deleteCache commonVerbosity
-    ClearStack (ClearStackArgs {..}) ->
-      mkConfig (caStackSuffix clearStackResolver) >>= run deleteCache commonVerbosity
-    ClearStackWork (ClearStackWorkArgs {..}) -> do
-      resolver <- maybe (getStackResolver clearStackWorkYaml) return clearStackWorkResolver
+    ClearStack proj -> do
+      resolver <- getStackResolver proj
+      mkConfig (caStackSuffix resolver) >>= run deleteCache commonVerbosity
+    ClearStackWork proj -> do
+      resolver <- getStackResolver proj
       mkConfig (caStackWorkSuffix resolver) >>= run deleteCache commonVerbosity
 
 

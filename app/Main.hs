@@ -144,27 +144,42 @@ stackRootArg =
           \~/.stack/ on Linux, C:\\sr on Windows")
 
 
-stackYamlArgParser :: Parser (Maybe FilePath)
-stackYamlArgParser =
-  (option
-     (readerMaybe str)
-     (long "stack-yaml" <> value Nothing <> metavar "STACK_YAML" <>
-      help
-        "Path to stack configuration file. Default is taken from stack: i.e. \
-           \STACK_YAML environment variable or ./stack.yaml"))
-
-
-stackResolverArgParser :: String -> Parser (Maybe Text)
-stackResolverArgParser defStr =
+stackProjectParser =
+  StackProject <$>
+  option
+    (readerMaybe str)
+    (long "stack-yaml" <> value Nothing <> metavar "STACK_YAML" <>
+     help
+       "Path to stack configuration file. Default is taken from stack: i.e. \
+       \STACK_YAML environment variable or ./stack.yaml") <*>
   option
     (readerMaybe readText)
     (long "resolver" <> value Nothing <> metavar "RESOLVER" <>
-     help ("Use a separate namespace for each stack resolver." <> defStr))
+     help
+       ("Use a separate namespace for each stack resolver.  Default value is \
+        \inferred from stack.yaml"))
+
+-- stackYamlArgParser :: Parser (Maybe FilePath)
+-- stackYamlArgParser =
+--   (option
+--      (readerMaybe str)
+--      (long "stack-yaml" <> value Nothing <> metavar "STACK_YAML" <>
+--       help
+--         "Path to stack configuration file. Default is taken from stack: i.e. \
+--            \STACK_YAML environment variable or ./stack.yaml"))
+
+
+-- stackResolverArgParser :: String -> Parser (Maybe Text)
+-- stackResolverArgParser defStr =
+--   option
+--     (readerMaybe readText)
+--     (long "resolver" <> value Nothing <> metavar "RESOLVER" <>
+--      help ("Use a separate namespace for each stack resolver." <> defStr))
 
 
 saveStackArgsParser :: Parser SaveStackArgs
 saveStackArgsParser =
-  SaveStackArgs <$> saveArgsParser many <*> stackResolverArgParser "" <*> stackRootArg
+  SaveStackArgs <$> saveArgsParser many <*> stackRootArg <*> stackProjectParser
 
 
 saveStackWorkArgsParser :: Parser SaveStackWorkArgs
@@ -172,7 +187,7 @@ saveStackWorkArgsParser =
   subparser $
   command "work" $
   info
-    (SaveStackWorkArgs <$> saveStackArgsParser <*> stackYamlArgParser <*>
+    (SaveStackWorkArgs <$> saveStackArgsParser <*>
      (option
         (readerMaybe str)
         (long "work-dir" <> value Nothing <> metavar "STACK_WORK" <>
@@ -207,14 +222,11 @@ actionParser =
      \subcommands must be suppied in order to clear out the cache created with \
      \`save` command."
      (clearParser
-        (ClearStack <$> (ClearStackArgs <$> stackResolverArgParser ""))
+        (ClearStack <$> stackProjectParser)
         "stack"
         "Clear stack cache"
         (clearParser
-           (ClearStackWork <$>
-            (ClearStackWorkArgs <$>
-             stackResolverArgParser " Default value is inferred from stack.yaml" <*>
-             stackYamlArgParser))
+           (ClearStackWork <$> stackProjectParser)
            "work"
            "Clear stack project work cache"
            A.empty)))
@@ -235,28 +247,18 @@ actionParser =
            \directory(ies), use `cache-s3 save stack work` instead." <>
          fullDesc)
     restoreStackArgsParser =
-      RestoreStackArgs <$> restoreArgsParser <*> stackResolverArgParser "" <*>
-      (switch
-         (long "upgrade" <>
-          help
-            "After restoring stack and its related files, try to upgrade \
-            \stack to newest version.")) <*>
-      stackRootArg
+      RestoreStackArgs <$> restoreArgsParser <*> stackRootArg <*> stackProjectParser
     restoreStackCommandParser =
       subparser $
       command "stack" $
       info
-        (restoreStackWorkParser <|>
-         RestoreStack <$> restoreStackArgsParser <* helpOption)
+        (restoreStackWorkParser <|> RestoreStack <$> restoreStackArgsParser <* helpOption)
         (progDesc "Command for restoring stack data from the S3 bucket." <> fullDesc)
     restoreStackWorkParser =
       subparser $
       command "work" $
       info
-        (RestoreStackWork <$>
-         (RestoreStackWorkArgs <$> restoreArgsParser <*>
-          stackResolverArgParser " Default value will be taken inferred from stack.yaml" <*>
-          stackYamlArgParser <* helpOption))
+        (RestoreStackWork <$> restoreStackArgsParser <* helpOption)
         (progDesc "Command for restoring .stack-work directory(ies) from the S3 bucket." <> fullDesc)
 
 

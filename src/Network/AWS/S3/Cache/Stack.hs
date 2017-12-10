@@ -20,6 +20,7 @@ import           Data.String
 import qualified Data.Text           as T
 import qualified Data.Vector         as V
 import           Data.Yaml
+import           Network.AWS.S3.Cache.Types
 import           System.Environment
 import           System.Exit
 import           System.FilePath
@@ -38,11 +39,12 @@ getStackGlobalPaths :: Maybe FilePath -- ^ Stack root directory
                     -> IO [FilePath]
 getStackGlobalPaths mStackRoot = do
   mapM (getStackPath (getStackRootArg mStackRoot)) ["--stack-root", "--programs"]
-  --"--local-bin"] -- turned off since a binary will change even if source didn't
+  --"--local-bin"] -- turned off since binaries' modtime will change even if source didn't
 
 
-getStackResolver :: Maybe FilePath -> IO T.Text
-getStackResolver mStackYaml = do
+getStackResolver :: StackProject -> IO T.Text
+getStackResolver (StackProject { stackResolver = Just resolver }) = return resolver
+getStackResolver (StackProject { stackYaml = mStackYaml }) = do
   stackYaml <- getStackYaml [] mStackYaml
   eObj <- decodeFileEither stackYaml
   case eObj of
@@ -61,7 +63,10 @@ getStackYaml args mStackYaml =
     Just stackYaml -> return stackYaml
     Nothing        -> getStackPath args "--config-location"
 
-getStackWorkPaths :: Maybe FilePath -- ^ Stack root
+
+getStackWorkPaths :: Maybe FilePath -- ^ Stack root. It is needed in order to prevent stack from
+                                    -- starting to install ghc and the rest in case when root folder
+                                    -- is custom.
                   -> Maybe FilePath -- ^ Path to --stack-yaml
                   -> Maybe FilePath -- ^ Relative path for --work-dir
                   -> IO [FilePath]

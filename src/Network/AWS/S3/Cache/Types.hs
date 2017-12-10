@@ -77,14 +77,13 @@ data SaveArgs = SaveArgs
   } deriving (Show)
 
 data SaveStackArgs = SaveStackArgs
-  { saveStackArgs     :: !SaveArgs
-  , saveStackResolver :: !(Maybe Text)
-  , saveStackRoot     :: !(Maybe FilePath)
+  { saveStackArgs    :: !SaveArgs
+  , saveStackRoot    :: !(Maybe FilePath)
+  , saveStackProject :: !StackProject
   } deriving (Show)
 
 data SaveStackWorkArgs = SaveStackWorkArgs
   { saveStackWorkArgs :: !SaveStackArgs
-  , saveStackWorkYaml :: !(Maybe FilePath)
   , saveStackWorkDir  :: !(Maybe FilePath)
   } deriving (Show)
 
@@ -94,30 +93,20 @@ data RestoreArgs = RestoreArgs
   } deriving (Show)
 
 
+data StackProject = StackProject
+  { stackYaml     :: !(Maybe FilePath)
+  , stackResolver :: !(Maybe Text)
+  } deriving (Show)
+
+
+
 data RestoreStackArgs = RestoreStackArgs
-  { restoreStackArgs     :: !RestoreArgs
-  , restoreStackResolver :: !(Maybe Text)
-  -- , restoreStackInstall :: !Bool -- Probably a bit too involved of a feature for too little
-  -- benefit
-  , restoreStackUpgrade  :: !Bool
-  , restoreStackRoot     :: !(Maybe FilePath)
-  } deriving (Show)
-
-data RestoreStackWorkArgs = RestoreStackWorkArgs
-  { restoreStackWorkArgs     :: !RestoreArgs
-  , restoreStackWorkResolver :: !(Maybe Text)
-  , restoreStackWorkYaml     :: !(Maybe FilePath)
+  { restoreStackArgs    :: !RestoreArgs
+  , restoreStackRoot    :: !(Maybe FilePath)
+  , restoreStackProject :: !StackProject
   } deriving (Show)
 
 
-data ClearStackArgs = ClearStackArgs
-  { clearStackResolver :: !(Maybe Text)
-  } deriving (Show)
-
-data ClearStackWorkArgs = ClearStackWorkArgs
-  { clearStackWorkResolver :: !(Maybe Text)
-  , clearStackWorkYaml     :: !(Maybe FilePath)
-  } deriving (Show)
 
 data Action
   = Save !SaveArgs
@@ -125,10 +114,10 @@ data Action
   | SaveStackWork !SaveStackWorkArgs
   | Restore !RestoreArgs
   | RestoreStack !RestoreStackArgs
-  | RestoreStackWork !RestoreStackWorkArgs
+  | RestoreStackWork !RestoreStackArgs
   | Clear
-  | ClearStack !ClearStackArgs
-  | ClearStackWork !ClearStackWorkArgs
+  | ClearStack !StackProject
+  | ClearStackWork !StackProject
   deriving (Show)
 
 
