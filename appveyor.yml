@@ -30,17 +30,21 @@ before_test:
 - 7z x stack.zip stack.exe
 - cp stack.exe %APPDATA%\local\bin\stack.exe
 
-# Try to restore cache
-# - ps: Start-FileDownload https://s3.amazonaws.com/lehins-ci-cache/cache-s3.exe -FileName cache-s3.exe
-# - cache-s3.exe --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug restore stack --base-branch=master
-# - cache-s3.exe --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug restore stack work --base-branch=master
-
-
 #- ps: Start-FileDownload https://s3.amazonaws.com/lehins-ci-cache/cache-s3.exe -FileName cache-s3.exe
 - ps: Start-FileDownload https://github.com/lehins/cache-s3/releases/download/latest/cache-s3-latest-windows-x86_64.zip -FileName cache-s3.zip
 - ps: 7z x cache-s3.zip cache-s3.exe
-- ps: .\cache-s3.exe --prefix=$env:APPVEYOR_PROJECT_NAME --suffix=windows -v debug restore stack --base-branch=master
-- ps: .\cache-s3.exe --prefix=$env:APPVEYOR_PROJECT_NAME --suffix=windows -v debug restore stack work --base-branch=master
+- ps: .\cache-s3.exe --prefix=$env:APPVEYOR_PROJECT_NAME
+                     --git-branch=$env:APPVEYOR_REPO_BRANCH
+                     --suffix=windows
+                     --verbosity=debug
+                     restore
+                     stack --base-branch=master
+- ps: .\cache-s3.exe --prefix=$env:APPVEYOR_PROJECT_NAME
+                     --git-branch=$env:APPVEYOR_REPO_BRANCH
+                     --suffix=windows
+                     --verbosity debug
+                     restore
+                     stack work --base-branch=master
 # - cache-s3.exe --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug restore stack --base-branch=master
 # - cache-s3.exe --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug restore stack work --base-branch=master
 
@@ -68,9 +72,9 @@ after_test:
 - ps: >-
     if (-not $env:APPVEYOR_PULL_REQUEST_NUMBER ) {
       if ($env:APPVEYOR_REPO_BRANCH -eq "master" ) {
-        stack exec -- cache-s3 --prefix=$env:APPVEYOR_PROJECT_NAME --suffix=windows -v debug save stack
+        stack exec -- cache-s3 --prefix=$env:APPVEYOR_PROJECT_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows -v debug save stack
       }
-      stack exec -- cache-s3 --prefix=$env:APPVEYOR_PROJECT_NAME --suffix=windows -v debug save stack work
+      stack exec -- cache-s3 --prefix=$env:APPVEYOR_PROJECT_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows -v debug save stack work
     }
 #- stack exec -- cache-s3 --prefix=%APPVEYOR_PROJECT_NAME% --suffix=windows -v debug save stack
 # - ps: >-

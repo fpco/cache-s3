@@ -22,7 +22,6 @@ import qualified Data.Vector         as V
 import           Data.Yaml
 import           Network.AWS.S3.Cache.Types
 import           System.Environment
-import           System.Exit
 import           System.FilePath
 import           System.Process
 
