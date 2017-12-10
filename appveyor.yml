@@ -25,10 +25,16 @@ before_test:
 
 # Install stack
 - mkdir %APPDATA%\local\bin\
-- $env:Path += ";%APPDATA%\local\bin"
+- ps: $env:Path += ";%APPDATA%\local\bin"
 - ps: Start-FileDownload http://www.stackage.org/stack/windows-x86_64 -FileName stack.zip
 - 7z x stack.zip stack.exe
 - mv stack.exe %APPDATA%\local\bin\stack.exe
+- ps: >-
+    if (-not $env:APPVEYOR_PULL_REQUEST_NUMBER ) {
+      if ($env:APPVEYOR_REPO_BRANCH -eq "master" ) {
+        echo "Not a PR and is master"
+      }
+    }
 
 # Try to restore cache
 # - ps: Start-FileDownload https://s3.amazonaws.com/lehins-ci-cache/cache-s3.exe -FileName cache-s3.exe
@@ -70,10 +76,6 @@ after_test:
       cp %APPDATA%\local\bin\cache-s3.exe cache-s3.exe
       7z a cache-s3.zip cache-s3.exe
       github-release upload --token $env:GITHUB_TOKEN --owner lehins --repo cache-s3 --file cache-s3.zip --name test-release --tag $env:APPVEYOR_REPO_TAG_NAME --name cache-s3-$env:APPVEYOR_REPO_TAG_NAME-windows_x64-86.zip
-    }
-- ps: >-
-    if (-not $env:APPVEYOR_PULL_REQUEST_NUMBER ) {
-      echo "Not a PR"
     }
 notifications:
   - provider: Email
