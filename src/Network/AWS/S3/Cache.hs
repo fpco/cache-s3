@@ -93,7 +93,6 @@ mkConfig CommonArgs {..} = do
   envInit <- newEnv Discover
   let env = maybe envInit (\reg -> envInit & envRegion .~ reg) commonRegion
   mGitBranch <- maybe (liftIO $ getBranchName commonGitDir) (return . Just) commonGitBranch
-  liftIO $ print mGitBranch
   let objKey = mkObjectKey commonPrefix mGitBranch commonSuffix
   return $ Config commonBucket objKey env
 

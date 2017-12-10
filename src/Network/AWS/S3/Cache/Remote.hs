@@ -177,7 +177,9 @@ deleteCache ::
   => m ()
 deleteCache = do
   c <- ask
-  sendAWS_ (deleteObject (c ^. bucketName) (c ^. objectKey)) (void . pure)
+  sendAWS_
+    (deleteObject (c ^. bucketName) (c ^. objectKey))
+    (const $ logAWS LevelInfo $ "Clear cache request was successfully submitted.")
 
 -- | Download an object from S3 and handle its content using the supplied sink.
 downloadCache ::
