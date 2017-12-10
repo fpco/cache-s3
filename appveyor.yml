@@ -25,7 +25,7 @@ before_test:
 
 # Install stack
 - mkdir %APPDATA%\local\bin\
-- set PATH="%PATH%;%APPDATA%\local\bin"
+- set PATH=%PATH%;%APPDATA%\local\bin
 - ps: Start-FileDownload http://www.stackage.org/stack/windows-x86_64 -FileName stack.zip
 - 7z x stack.zip stack.exe
 - cp stack.exe %APPDATA%\local\bin\stack.exe
