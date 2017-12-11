@@ -63,8 +63,8 @@ after_test:
       7z x github-release.zip github-release.exe
       cp $env:APPDATA\local\bin\cache-s3.exe cache-s3.exe
       7z a cache-s3.zip cache-s3.exe
-      .\github-release version
-      .\github-release upload --token=$env:GITHUB_TOKEN --owner=lehins --repo=cache-s3 --file=cache-s3.zip --tag=$env:APPVEYOR_REPO_TAG_NAME --name=cache-s3-$env:APPVEYOR_REPO_TAG_NAME-windows_x64-86.zip
+      echo ".\github-release upload --token=$env:GITHUB_TOKEN --repo=$env:APPVEYOR_REPO_NAME --file=cache-s3.zip --tag=$env:APPVEYOR_REPO_TAG_NAME --name=cache-s3-$env:APPVEYOR_REPO_TAG_NAME-windows_x64-86.zip"
+      .\github-release upload --token=$env:GITHUB_TOKEN --repo=$env:APPVEYOR_REPO_NAME --file=cache-s3.zip --tag=$env:APPVEYOR_REPO_TAG_NAME --name=cache-s3-$env:APPVEYOR_REPO_TAG_NAME-windows_x64-86.zip
     }
 notifications:
   - provider: Email

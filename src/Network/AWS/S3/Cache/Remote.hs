@@ -364,4 +364,4 @@ formatBytes val =
       P.map (\(t, abbr) -> (scale (val10 `divMod` t), abbr)) $
       P.zip
         [2 ^ (x * 10) | x <- [0 :: Int ..]]
-        ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"]
+        ["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB"]
