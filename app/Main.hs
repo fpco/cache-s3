@@ -101,7 +101,10 @@ commonArgsParser version mS3Bucket =
   (option
      readLogLevel
      (long "verbosity" <> short 'v' <> value LevelInfo <>
-      help "Verbosity level (debug|info|warn|error). Default level is 'info'.")) <*
+      help "Verbosity level (debug|info|warn|error). Default level is 'info'.")) <*>
+  (switch
+     (long "concise" <> short 'c' <>
+      help "Shorten the output by removing timestamp and name of the tool.")) <*
   (infoOption
      ("cache-s3-" <> showVersion version)
      (long "version" <> help "Print current verison of the program."))

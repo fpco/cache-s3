@@ -56,15 +56,15 @@ after_test:
       }
       stack exec -- cache-s3 --prefix=$env:APPVEYOR_PROJECT_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows -v debug save stack work
     }
-# Make a release on every git tag
+# Upload an executable to the release for every git tag
 - ps: >-
     if ($env:APPVEYOR_REPO_TAG_NAME) {
       Start-FileDownload https://github.com/tfausak/github-release/releases/download/$env:GITHUB_RELEASE_VERSION/github-release-$env:GITHUB_RELEASE_VERSION-windows.zip -FileName github-release.zip
       7z x github-release.zip github-release.exe
       cp $env:APPDATA\local\bin\cache-s3.exe cache-s3.exe
       7z a cache-s3.zip cache-s3.exe
-      echo ".\github-release upload --token=$env:GITHUB_TOKEN --repo=$env:APPVEYOR_REPO_NAME --file=cache-s3.zip --tag=$env:APPVEYOR_REPO_TAG_NAME --name=cache-s3-$env:APPVEYOR_REPO_TAG_NAME-windows_x64-86.zip"
       .\github-release upload --token=$env:GITHUB_TOKEN --repo=$env:APPVEYOR_REPO_NAME --file=cache-s3.zip --tag=$env:APPVEYOR_REPO_TAG_NAME --name=cache-s3-$env:APPVEYOR_REPO_TAG_NAME-windows_x64-86.zip
+      .\github-release upload --token=$env:GITHUB_TOKEN --repo=$env:APPVEYOR_REPO_NAME --file=cache-s3.zip --tag=latest --name=cache-s3-latest-windows_x64-86.zip
     }
 notifications:
   - provider: Email

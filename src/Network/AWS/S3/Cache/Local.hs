@@ -27,7 +27,6 @@ import           Data.Conduit
 import           Data.Conduit.Binary
 import           Data.Conduit.List            as C
 import           Data.Conduit.Tar
-import           Data.Foldable                as F (foldrM)
 import           Data.List                    as L
 import           Data.Monoid                  ((<>))
 import           Data.Text                    as T
@@ -44,25 +43,20 @@ tarFiles :: (MonadCatch m, MonadResource m, MonadLogger m) =>
 tarFiles dirs = do
   logDebugN "Preparing files for saving in the cache."
   dirsCanonical <- liftIO $ P.mapM canonicalizePath dirs
-  uniqueDirs <- removeMissingM $ removePrefixSorted $ L.sort dirsCanonical
+  let uniqueDirs = removePrefixSorted $ L.sort dirsCanonical
   if P.null uniqueDirs
     then logErrorN "No paths to cache has been specified."
-    else sourceList uniqueDirs .| iterM logPath .| filePathConduit .| void tar
+    else sourceList uniqueDirs .| C.mapMaybeM skipMissing .| filePathConduit .| void tar
   where
-    logPath fp = do
+    skipMissing fp = do
       exist <- liftIO $ doesPathExist fp
       if exist
-        then logInfoN $ "Caching: " <> T.pack fp
-        else logErrorN $ "File path does not exist: " <> T.pack fp
-    removeMissingM = F.foldrM skipMissing []
-      where
-        skipMissing fp acc = do
-          exist <- liftIO $ doesPathExist fp
-          if exist
-            then return (fp : acc)
-            else do
-              logWarnN $ "File path is skipped since it is missing: " <> T.pack fp
-              return acc
+        then do
+          logInfoN $ "Caching: " <> T.pack fp
+          return $ Just fp
+        else do
+          logWarnN $ "File path is skipped since it is missing: " <> T.pack fp
+          return Nothing
 
 -- | Avoid saving duplicate files by removing any subpaths. Paths must be canonicalized and sorted.
 removePrefixSorted :: Eq a => [[a]] -> [[a]]

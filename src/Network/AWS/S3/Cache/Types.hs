@@ -67,6 +67,7 @@ data CommonArgs = CommonArgs
   , commonGitBranch :: !(Maybe Text)
   , commonSuffix    :: !(Maybe Text)
   , commonVerbosity :: !L.LogLevel
+  , commonConcise   :: !Bool
   } deriving (Show)
 
 
