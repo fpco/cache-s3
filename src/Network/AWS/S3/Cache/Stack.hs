@@ -70,7 +70,8 @@ getStackWorkPaths :: Maybe FilePath -- ^ Stack root. It is needed in order to pr
                   -> Maybe FilePath -- ^ Relative path for --work-dir
                   -> IO [FilePath]
 getStackWorkPaths mStackRoot mStackYaml mWorkDir = do
-  let fromStr (String str) = Just $ T.unpack str
+  let fromStr (String ".") = Nothing -- Project root will be added separately
+      fromStr (String str) = Just $ T.unpack str
       fromStr _ = Nothing
   stackYaml <- getStackYaml mStackYaml
   projectRoot <-
@@ -89,7 +90,7 @@ getStackWorkPaths mStackRoot mStackYaml mWorkDir = do
             Just (Array v) -> return $ V.toList (V.mapMaybe fromStr v)
             _ -> error $ "Expected 'packages' to be a list in the config: " ++ stackYaml
       _ -> error $ "Couldn't find 'packages' in the config: " ++ stackYaml
-  return $ map (\pkg -> projectRoot </> pkg </> workDir) pathPkgs
+  return ((projectRoot </> workDir) : map (\pkg -> projectRoot </> pkg </> workDir) pathPkgs)
 
 
 -- | Will do its best to find the git repo and get the current branch name, unless GIT_BRANCH env
