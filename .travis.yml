@@ -36,7 +36,7 @@ install:
 script:
 - |
   set -ex
-  stack --no-terminal install --ghc-options='-optl-static -optl-pthread'
+  stack --no-terminal install --ghc-options='-optl-static -optl-pthread -fPIC'
   set +ex
 
 after_success:
