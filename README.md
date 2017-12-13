@@ -1,38 +1,38 @@
 # cache-s3
 
 This is tool is designed to store files, which were produced during a CI build, to an S3 bucket, so
-they can be used by subsequent builds. It is tailored specifically for `stack`, the Haskell build
-tool, but it will work just fine with other languages, compilers, what have you.
+they can be used by subsequent builds. Although this tool is is tailored specifically for `stack`,
+it is by no means limited to Haskell or `stack` users.
 
 `cache-s3` is not simply a wrapper around a bunch of other tools, it is all written in Haskell,
 which comes with a great benefit of being cross platform. Executable versions for common operating
-system can be downloaded form github [releases](https://github.com/fpco/cache-s3/releases) page.
+systems can be downloaded from github [releases](https://github.com/fpco/cache-s3/releases) page.
 
 
 ## Problems it solves
 
-All of the CI providers already have some file caching capability, so why do we need to pay AWS for
-storage on S3, which we already get for free from Travis, AppVeyor, CircleCI, etc. Here are the
-limitations with CI providers that addressed by `cache-s3`:
+CI providers already have some form of caching capability in place, so natural question comes to
+mind is why do we even need to pay AWS for storage on S3, which we already get for free from Travis,
+AppVeyor, CircleCI, etc. Here are the limitations with CI providers that addressed by `cache-s3`:
 
+* __`stack` awareness__. None of the providers have support for
+  [stack](https://docs.haskellstack.org/), which can be solved by complicated scripts that figure
+  out which paths need caching and move the copious amounts files around so that they can be saved
+  and restored properly.
 * __Cache size limit__. Some providers limit the amount of data that can be retained between builds,
   while S3 is limited only by the cash in your pockets.
-* __Cache sharing__. Most providers do not let you use cache from builds created by another branch,
-  like `master` for example.
-* __Access to cache__. For providers like Tarvis that do allow reading cache created for master,
-  stored data can be read even by the forked repositories during the pull requests. With `cache-s3`
-  you have full access control by the means of S3 bucket IAM policies. Despite this, I would advise
-  not to store any sensitive information in the cache, there are better tools for managing private
-  data out there.
-* __`stack` awareness__. None of the providers have support for `stack`, which can be solved by
-  complicated scripts that figure out which paths need caching and move the copious amounts files
-  around so taht they can be saved and restored properly.
+* __Cache sharing__. Most providers do not let you use cache from builds created by another branch.
+* __Access to cache__. For providers like Travis, that do allow reading cache created for master, it
+  can be read even by the forked repositories during the pull requests, which has a potential of
+  leaking sensitive data. With `cache-s3` you have full access control by the means of S3 bucket IAM
+  policies. Despite this, I would advise not to store any private data in the cache, there are better
+  tools for managing sensitive information out there.
 
 ### Drawback
 
 * Usage ain't free, gotta pay Amazon for S3.
-* Saving and restoring cache will likely be slower than CI provider's native solution, since data
-  has to move over internet.
+* Saving and restoring cache will likely be slightly slower than CI provider's native solution,
+  since data has to move over internet.
 
 
 ## Usage
