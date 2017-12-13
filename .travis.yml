@@ -36,18 +36,18 @@ install:
 script:
 - |
   set -ex
+  # Workaroud for linker issue.
+  # See: https://www.fpcomplete.com/blog/2016/10/static-compilation-with-stack#crtbegint-swap
+  cd /usr/lib/gcc/x86_64-linux-gnu/4.8/
+  sudo rm crtbeginT.o
+  sudo cp crtbeginS.o crtbeginT.o
+  cd $TRAVIS_BUILD_DIR
   stack --no-terminal install --ghc-options='-optl-static -optl-pthread -fPIC'
   set +ex
 
 after_success:
 - |
   if [ "$TRAVIS_PULL_REQUEST" = "false" ]; then
-    # Workaroud for linker issue.
-    # See: https://www.fpcomplete.com/blog/2016/10/static-compilation-with-stack#crtbegint-swap
-    cd /usr/lib/gcc/x86_64-linux-gnu/4.8/
-    sudo rm crtbeginT.o
-    sudo cp crtbeginS.o crtbeginT.o
-    cd $TRAVIS_BUILD_DIR
     if [ "$TRAVIS_BRANCH" = "master" ]; then
       stack exec -- cache-s3 --prefix=cache-s3 \
                              --git-branch="$TRAVIS_BRANCH" \
