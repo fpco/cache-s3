@@ -1,5 +1,5 @@
 name:                cache-s3
-version:             0.1.0.0
+version:             0.1.0
 -- synopsis:
 -- description:
 homepage:            https://github.com/fpco/cache-s3#readme
@@ -35,6 +35,7 @@ library
                      , cryptonite-conduit
                      , directory >= 1.3.0.0
                      , exceptions
+                     , fast-logger >= 2.1.0
                      , filepath
                      , git
                      , http-types

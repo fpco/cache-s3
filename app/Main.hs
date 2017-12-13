@@ -66,7 +66,7 @@ commonArgsParser version mS3Bucket =
             \If S3_BUCKET environment variable is not set, this argument is required."))) <*>
   (option
      (readerMaybe readRegion)
-     (long "region" <> short 'r' <> value Nothing <>
+     (long "region" <> short 'r' <> value Nothing <> metavar "AWS_REGION" <>
       help
         "Region where S3 bucket is located. \
         \By default 'us-east-1' will be used unless AWS_REGION environment variable \
@@ -90,7 +90,8 @@ commonArgsParser version mS3Bucket =
      (long "git-branch" <> value Nothing <> metavar "GIT_BRANCH" <>
       help
         "Current git branch. By default will use the branch the HEAD of repository is \
-        \pointing to. This is argument is used for proper namespacing on S3.")) <*>
+        \pointing to, unless GIT_BRANCH environment variables is set. This argument is \
+        \used for proper namespacing on S3.")) <*>
   (option
      (readerMaybe readText)
      (long "suffix" <> value Nothing <>
@@ -116,11 +117,11 @@ saveArgsParser paths =
   paths (option str (long "path" <> short 'p' <> help "All the paths that should be chached")) <*>
   (option
      readText
-     (long "hash" <> short 'h' <> value "sha256" <>
+     (long "hash" <> value "sha256" <>
       help "Hashing algorithm to use for cache validation")) <*>
   option
     (maybeReader (readCompression . T.pack))
-    (long "compression" <> short 'c' <> value GZip <>
+    (long "compression" <> value GZip <>
      help
        ("Compression algorithm to use for cache. Default 'gzip'. Supported: " <>
         T.unpack supportedCompression))
@@ -147,6 +148,7 @@ stackRootArg =
           \~/.stack/ on Linux, C:\\sr on Windows")
 
 
+stackProjectParser :: Parser StackProject
 stackProjectParser =
   StackProject <$>
   option
@@ -157,27 +159,10 @@ stackProjectParser =
        \STACK_YAML environment variable or ./stack.yaml") <*>
   option
     (readerMaybe readText)
-    (long "resolver" <> value Nothing <> metavar "RESOLVER" <>
+    (long "resolver" <> value Nothing <>
      help
        ("Use a separate namespace for each stack resolver.  Default value is \
         \inferred from stack.yaml"))
-
--- stackYamlArgParser :: Parser (Maybe FilePath)
--- stackYamlArgParser =
---   (option
---      (readerMaybe str)
---      (long "stack-yaml" <> value Nothing <> metavar "STACK_YAML" <>
---       help
---         "Path to stack configuration file. Default is taken from stack: i.e. \
---            \STACK_YAML environment variable or ./stack.yaml"))
-
-
--- stackResolverArgParser :: String -> Parser (Maybe Text)
--- stackResolverArgParser defStr =
---   option
---     (readerMaybe readText)
---     (long "resolver" <> value Nothing <> metavar "RESOLVER" <>
---      help ("Use a separate namespace for each stack resolver." <> defStr))
 
 
 saveStackArgsParser :: Parser SaveStackArgs

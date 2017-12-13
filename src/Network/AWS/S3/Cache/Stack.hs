@@ -38,7 +38,6 @@ getStackGlobalPaths :: Maybe FilePath -- ^ Stack root directory
                     -> IO [FilePath]
 getStackGlobalPaths mStackRoot = do
   mapM (getStackPath (getStackRootArg mStackRoot)) ["--stack-root", "--programs"]
-  --"--local-bin"] -- turned off since binaries' modtime will change even if source didn't
 
 
 getStackResolver :: StackProject -> IO T.Text

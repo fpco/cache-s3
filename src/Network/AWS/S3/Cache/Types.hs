@@ -34,11 +34,12 @@ import           Network.AWS.S3.Types
 import qualified Data.Conduit.LZ4             as LZ4
 #endif
 
-data Config =
-  Config
-  { _bucketName :: !BucketName
-  , _objectKey  :: !ObjectKey
-  , _confEnv    :: !Env
+data Config = Config
+  { _bucketName  :: !BucketName
+  , _objectKey   :: !ObjectKey
+  , _confEnv     :: !Env
+  , _minLogLevel :: !L.LogLevel
+  , _isConcise   :: !Bool
   }
 
 makeLensesWith classUnderscoreNoPrefixFields ''Config

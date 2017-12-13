@@ -203,7 +203,7 @@ downloadCache sink = do
               logAWS LevelInfo "No previously stored cache was found."
               MaybeT $ return Nothing
           _ -> return (Just LevelError, ())
-  logAWS LevelInfo "Checking for previously stored cache."
+  logAWS LevelDebug "Checking for previously stored cache."
   sendAWS getObjReq onErr $ \resp -> do
     logAWS LevelDebug $ "Starting to download previous cache."
     compAlgTxt <-

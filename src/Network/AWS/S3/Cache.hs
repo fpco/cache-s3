@@ -26,6 +26,7 @@ import           Control.Monad.Trans.AWS
 import           Control.Monad.Trans.Control  (MonadBaseControl)
 import           Control.Monad.Trans.Maybe
 import           Control.Monad.Trans.Resource (ResourceT)
+import           Data.ByteString.Char8        as S8
 import           Data.Monoid                  ((<>))
 import           Data.Text                    as T
 import           Data.Time
@@ -35,25 +36,39 @@ import           Network.AWS.S3.Cache.Remote
 import           Network.AWS.S3.Cache.Stack
 import           Network.AWS.S3.Cache.Types
 import qualified Paths_cache_s3               as Paths
+import           Prelude                      as P
 import           System.Exit
+import           System.Log.FastLogger        (fromLogStr)
 
--- TODO (improvements):
--- - Create new logger instead of modifying anotherone
--- - Formal log level prettier
--- - Add option for turninng off the timestamp
---
--- | Filter out min log level events and add a timestamp to all events.
-formatLogger ::
-     L.LogLevel -- ^ Minimum log level
+
+showLogLevel :: L.LogLevel -> LogStr
+showLogLevel level =
+  case level of
+    LevelDebug   -> "Debug"
+    LevelInfo    -> "Info "
+    LevelWarn    -> "Warn "
+    LevelError   -> "Error"
+    LevelOther o -> "Other " <> toLogStr o
+
+customLoggerT ::
+     Bool -- ^ Should logger be concise (ommit timestamp and app name)
+  -> L.LogLevel -- ^ Minimum log level
   -> LoggingT m a
-  -> LoggingT m a
-formatLogger minLogLevel (LoggingT f) =
-  LoggingT $ \logger ->
-    f $ \loc src level msg ->
-      when (level >= minLogLevel) $ do
-        now <- getCurrentTime
-        logger loc src level ("[cache-s3] - [" <> toLogStr (formatRFC822 now) <> "]: " <> msg)
-        when (level == LevelError) $ exitWith (ExitFailure 1)
+  -> m a
+customLoggerT con minLevel (LoggingT f) = do
+  f $ \_ _ level msg ->
+    when (level >= minLevel) $ do
+      let levelStr = "[" <> showLogLevel level <> "]"
+      entryPrefix <-
+        if con
+          then return $ levelStr <> ": "
+          else do
+            now <- getCurrentTime
+            return $ "[cache-s3]" <> levelStr <> "[" <> toLogStr (formatRFC822 now) <> "]: "
+      S8.putStrLn $ fromLogStr (entryPrefix <> msg)
+      when (level == LevelError) $ exitWith (ExitFailure 1)
+
+
 
 -- | Format `UTCTime` as a `String`.
 formatRFC822 :: UTCTime -> String
@@ -63,16 +78,16 @@ formatRFC822 = formatTime defaultTimeLocale rfc822DateFormat
 -- | Run the cache action.
 run ::
      (MonadBaseControl IO m, MonadIO m)
-  => ReaderT r (LoggingT (ResourceT m)) a
-  -> L.LogLevel
-  -> r
+  => ReaderT Config (LoggingT (ResourceT m)) a
+  -> Config
   -> m a
-run action minLogLevel conf =
-  runResourceT $ runStdoutLoggingT $ formatLogger minLogLevel $ runReaderT action conf
+run action conf =
+  runResourceT $
+  customLoggerT (conf ^. isConcise) (conf ^. minLogLevel) $ runReaderT action conf
 
 
-saveCache :: Text -> Compression -> [FilePath] -> L.LogLevel -> Config -> IO ()
-saveCache hAlgTxt comp dirs minLogLevel conf = do
+saveCache :: Text -> Compression -> [FilePath] -> Config -> IO ()
+saveCache hAlgTxt comp dirs conf = do
   let hashNoSupport sup =
         logErrorN $
         "Hash algorithm '" <> hAlgTxt <> "' is not supported, use one of these instead: " <>
@@ -80,11 +95,10 @@ saveCache hAlgTxt comp dirs minLogLevel conf = do
   run
     (withHashAlgorithm_ hAlgTxt hashNoSupport $ \hAlg ->
        getCacheHandle dirs hAlg comp >>= uploadCache)
-    minLogLevel
     conf
 
 
-restoreCache :: L.LogLevel -> Config -> IO Bool
+restoreCache :: Config -> IO Bool
 restoreCache = run (maybe False (const True) <$> runMaybeT (downloadCache restoreFilesFromCache))
 
 mkConfig :: (MonadIO m, MonadCatch m) =>
@@ -94,7 +108,7 @@ mkConfig CommonArgs {..} = do
   let env = maybe envInit (\reg -> envInit & envRegion .~ reg) commonRegion
   mGitBranch <- maybe (liftIO $ getBranchName commonGitDir) (return . Just) commonGitBranch
   let objKey = mkObjectKey commonPrefix mGitBranch commonSuffix
-  return $ Config commonBucket objKey env
+  return $ Config commonBucket objKey env commonVerbosity commonConcise
 
 
 runCacheS3 :: CommonArgs -> Action -> IO ()
@@ -105,7 +119,7 @@ runCacheS3 ca@CommonArgs {..} action = do
   case action of
     Save (SaveArgs {..}) -> do
       config <- mkConfig ca
-      saveCache saveHash saveCompression savePaths commonVerbosity config
+      saveCache saveHash saveCompression savePaths config
     SaveStack (SaveStackArgs {..}) -> do
       stackGlobalPaths <- getStackGlobalPaths saveStackRoot
       resolver <- getStackResolver saveStackProject
@@ -120,11 +134,13 @@ runCacheS3 ca@CommonArgs {..} action = do
         Save saveStackArgs {savePaths = savePaths saveStackArgs ++ stackLocalPaths}
     Restore (RestoreArgs {..}) -> do
       config <- mkConfig ca
-      restoreSuccessfull <- restoreCache commonVerbosity config
+      restoreSuccessfull <- restoreCache config
       case (restoreSuccessfull, restoreBaseBranch) of
         (False, Just _) -> do
           let baseObjKey = mkObjectKey commonPrefix restoreBaseBranch commonSuffix
-          void $ restoreCache commonVerbosity $ Config commonBucket baseObjKey (config ^. confEnv)
+          void $
+            restoreCache $
+            Config commonBucket baseObjKey (config ^. confEnv) commonVerbosity commonConcise
         _ -> return ()
     RestoreStack (RestoreStackArgs {..}) -> do
       resolver <- getStackResolver restoreStackProject
@@ -132,13 +148,13 @@ runCacheS3 ca@CommonArgs {..} action = do
     RestoreStackWork (RestoreStackArgs {..}) -> do
       resolver <- getStackResolver restoreStackProject
       runCacheS3 (caStackWorkSuffix resolver) (Restore restoreStackArgs)
-    Clear -> mkConfig ca >>= run deleteCache commonVerbosity
+    Clear -> mkConfig ca >>= run deleteCache
     ClearStack proj -> do
       resolver <- getStackResolver proj
-      mkConfig (caStackSuffix resolver) >>= run deleteCache commonVerbosity
+      mkConfig (caStackSuffix resolver) >>= run deleteCache
     ClearStackWork proj -> do
       resolver <- getStackResolver proj
-      mkConfig (caStackWorkSuffix resolver) >>= run deleteCache commonVerbosity
+      mkConfig (caStackWorkSuffix resolver) >>= run deleteCache
 
 
 cacheS3Version :: Version
