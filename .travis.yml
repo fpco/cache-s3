@@ -1,4 +1,4 @@
-sudo: false
+sudo: true
 
 # Do not choose a language; we provide our own build tools.
 language: generic
@@ -25,7 +25,7 @@ before_install:
     travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
     #travis_retry curl -L https://github.com/lehins/cache-s3/releases/download/latest/cache-s3-latest-linux-x86_64.tar.gz | tar xz --strip-components=1 -C ~/.local/bin 'cache-s3'
   fi
-  travis_retry curl -L https://github.com/lehins/cache-s3/releases/download/latest/cache-s3-latest-$TRAVIS_OS_NAME-x86_64.tar.gz | tar xz -C ~/.local/bin 'cache-s3'
+  travis_retry curl -L https://github.com/lehins/cache-s3/releases/download/latest/cache-s3-latest-$TRAVIS_OS_NAME-x86_64.tar.gz | tar xz -C ~/.local/bin 'cache-s3' || echo "Reading of cache is disabled."
 
 install:
 - |
@@ -42,6 +42,12 @@ script:
 after_success:
 - |
   if [ "$TRAVIS_PULL_REQUEST" = "false" ]; then
+    # Workaroud for linker issue.
+    # See: https://www.fpcomplete.com/blog/2016/10/static-compilation-with-stack#crtbegint-swap
+    cd /usr/lib/gcc/x86_64-linux-gnu/4.8/
+    sudo rm crtbeginT.o
+    sudo cp crtbeginS.o crtbeginT.o
+    cd $TRAVIS_BUILD_DIR
     if [ "$TRAVIS_BRANCH" = "master" ]; then
       stack exec -- cache-s3 --prefix=cache-s3 \
                              --git-branch="$TRAVIS_BRANCH" \
@@ -55,3 +61,11 @@ after_success:
                            --verbosity=debug
                            save stack work
   fi
+  if [ -n "$TRAVIS_TAG}" ]; then
+      travis_retry curl -L https://github.com/tfausak/github-release/releases/download/$env:GITHUB_RELEASE_VERSION/github-release-$env:GITHUB_RELEASE_VERSION-$TRAVIS_OS_NAME.gz | gunzip > github-release
+      chmod a+x github-release
+      stack exec -- cp $(which cache-s3) .
+      tar -czf cache-s3-$TRAVIS_TAG-$TRAVIS_OS_NAME-x86_64.tar.gz
+      .\github-release upload --token=$env:GITHUB_TOKEN --repo=$env:APPVEYOR_REPO_NAME --file=cache-s3.zip --tag=$env:APPVEYOR_REPO_TAG_NAME --name=cache-s3-$env:APPVEYOR_REPO_TAG_NAME-windows_x64-86.zip
+      .\github-release upload --token=$env:GITHUB_TOKEN --repo=$env:APPVEYOR_REPO_NAME --file=cache-s3.zip --tag=latest --name=cache-s3-latest-windows_x64-86.zip
+    }
