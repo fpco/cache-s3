@@ -200,6 +200,6 @@ manually ispected for content, if some CI build failure debugging is necessary.
   permisssions or ownership. So even `touch` of one of the files being cached will trigger an upload
   to S3.
 * Consistency of cache is verified when it's being restored.
-
-
-
+* Compression used is customizable. For now on Windows only gzip is available, gzip and lz4 on
+  others.
+* Default hashing algorithm SHA256 can also be overriden.
