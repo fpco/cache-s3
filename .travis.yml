@@ -49,21 +49,22 @@ script:
 
 after_success:
 - |
-  echo "TRAVIS_PULL_REQUEST: $TRAVIS_PULL_REQUEST"
-  if [ "${TRAVIS_PULL_REQUEST}" = "false" ]; then
-    if [ "$TRAVIS_BRANCH" = "master" ]; then
+  if [ "$TRAVIS_PULL_REQUEST" = false ]; then
+    echo "TRAVIS_PULL_REQUEST: $TRAVIS_PULL_REQUEST"
+  fi
+  if [ "$TRAVIS_BRANCH" = "master" ]; then
       stack exec -- cache-s3 --prefix=$TRAVIS_REPO_SLUG \
                              --git-branch="$TRAVIS_BRANCH" \
                              --suffix="$TRAVIS_OS_NAME" \
                              --verbosity=debug \
                              save stack
-    fi
-    stack exec -- cache-s3 --prefix=$TRAVIS_REPO_SLUG \
+  fi
+  stack exec -- cache-s3 --prefix=$TRAVIS_REPO_SLUG \
                            --git-branch="$TRAVIS_BRANCH" \
                            --suffix="$TRAVIS_OS_NAME" \
                            --verbosity=debug
                            save stack work
-  fi
+  # fi
   # if [ -n "$TRAVIS_TAG" ]; then
   #     travis_retry curl -L https://github.com/tfausak/github-release/releases/download/$env:GITHUB_RELEASE_VERSION/github-release-$env:GITHUB_RELEASE_VERSION-$TRAVIS_OS_NAME.gz | gunzip > github-release
   #     chmod a+x github-release
