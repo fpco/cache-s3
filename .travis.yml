@@ -50,7 +50,7 @@ script:
 after_success:
 - |
   echo "TRAVIS_PULL_REQUEST: $TRAVIS_PULL_REQUEST"
-  if [ ! "$TRAVIS_PULL_REQUEST" ]; then
+  if [ "${TRAVIS_PULL_REQUEST}" = "false" ]; then
     if [ "$TRAVIS_BRANCH" = "master" ]; then
       stack exec -- cache-s3 --prefix=$TRAVIS_REPO_SLUG \
                              --git-branch="$TRAVIS_BRANCH" \
