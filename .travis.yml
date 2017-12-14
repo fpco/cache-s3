@@ -36,12 +36,14 @@ install:
 script:
 - |
   set -ex
-  # Workaroud for linker issue.
-  # See: https://www.fpcomplete.com/blog/2016/10/static-compilation-with-stack#crtbegint-swap
-  cd /usr/lib/gcc/x86_64-linux-gnu/4.8/
-  sudo rm crtbeginT.o
-  sudo cp crtbeginS.o crtbeginT.o
-  cd $TRAVIS_BUILD_DIR
+  if [ "$TRAVIS_OS_NAME" = "linux" ]; then
+    # Workaroud for linker issue.
+    # See: https://www.fpcomplete.com/blog/2016/10/static-compilation-with-stack#crtbegint-swap
+    cd /usr/lib/gcc/x86_64-linux-gnu/4.8/
+    sudo rm crtbeginT.o
+    sudo cp crtbeginS.o crtbeginT.o
+    cd $TRAVIS_BUILD_DIR
+  fi
   stack --no-terminal install --ghc-options='-optl-static -optl-pthread -fPIC'
   set +ex
 
