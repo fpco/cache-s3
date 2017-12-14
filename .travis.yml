@@ -49,25 +49,26 @@ script:
 
 after_success:
 - |
-  if [ "$TRAVIS_PULL_REQUEST" = "false" ]; then
+  echo "TRAVIS_PULL_REQUEST: $TRAVIS_PULL_REQUEST"
+  if [ ! "$TRAVIS_PULL_REQUEST" ]; then
     if [ "$TRAVIS_BRANCH" = "master" ]; then
-      stack exec -- cache-s3 --prefix=cache-s3 \
+      stack exec -- cache-s3 --prefix=$TRAVIS_REPO_SLUG \
                              --git-branch="$TRAVIS_BRANCH" \
                              --suffix="$TRAVIS_OS_NAME" \
                              --verbosity=debug \
                              save stack
     fi
-    stack exec -- cache-s3 --prefix=cache-s3 \
+    stack exec -- cache-s3 --prefix=$TRAVIS_REPO_SLUG \
                            --git-branch="$TRAVIS_BRANCH" \
                            --suffix="$TRAVIS_OS_NAME" \
                            --verbosity=debug
                            save stack work
   fi
-  if [ -n "$TRAVIS_TAG}" ]; then
-      travis_retry curl -L https://github.com/tfausak/github-release/releases/download/$env:GITHUB_RELEASE_VERSION/github-release-$env:GITHUB_RELEASE_VERSION-$TRAVIS_OS_NAME.gz | gunzip > github-release
-      chmod a+x github-release
-      stack exec -- cp $(which cache-s3) .
-      tar -czf cache-s3-$TRAVIS_TAG-$TRAVIS_OS_NAME-x86_64.tar.gz
-      .\github-release upload --token=$env:GITHUB_TOKEN --repo=$env:APPVEYOR_REPO_NAME --file=cache-s3.zip --tag=$env:APPVEYOR_REPO_TAG_NAME --name=cache-s3-$env:APPVEYOR_REPO_TAG_NAME-windows_x64-86.zip
-      .\github-release upload --token=$env:GITHUB_TOKEN --repo=$env:APPVEYOR_REPO_NAME --file=cache-s3.zip --tag=latest --name=cache-s3-latest-windows_x64-86.zip
-    }
+  # if [ -n "$TRAVIS_TAG" ]; then
+  #     travis_retry curl -L https://github.com/tfausak/github-release/releases/download/$env:GITHUB_RELEASE_VERSION/github-release-$env:GITHUB_RELEASE_VERSION-$TRAVIS_OS_NAME.gz | gunzip > github-release
+  #     chmod a+x github-release
+  #     stack exec -- cp $(which cache-s3) .
+  #     tar -czf cache-s3-$TRAVIS_TAG-$TRAVIS_OS_NAME-x86_64.tar.gz
+  #     .\github-release upload --token=$env:GITHUB_TOKEN --repo=$env:APPVEYOR_REPO_NAME --file=cache-s3.zip --tag=$env:APPVEYOR_REPO_TAG_NAME --name=cache-s3-$env:APPVEYOR_REPO_TAG_NAME-windows_x64-86.zip
+  #     .\github-release upload --token=$env:GITHUB_TOKEN --repo=$env:APPVEYOR_REPO_NAME --file=cache-s3.zip --tag=latest --name=cache-s3-latest-windows_x64-86.zip
+  # fi

@@ -25,13 +25,13 @@ before_test:
 
 - ps: Start-FileDownload https://github.com/lehins/cache-s3/releases/download/latest/cache-s3-latest-windows-x86_64.zip -FileName cache-s3.zip
 - ps: 7z x cache-s3.zip cache-s3.exe
-- ps: .\cache-s3 --prefix=$env:APPVEYOR_PROJECT_NAME
+- ps: .\cache-s3 --prefix=$env:APPVEYOR_REPO_NAME
                  --git-branch=$env:APPVEYOR_REPO_BRANCH
                  --suffix=windows
                  --verbosity=debug
                  restore
                  stack --base-branch=master
-- ps: .\cache-s3 --prefix=$env:APPVEYOR_PROJECT_NAME
+- ps: .\cache-s3 --prefix=$env:APPVEYOR_REPO_NAME
                  --git-branch=$env:APPVEYOR_REPO_BRANCH
                  --suffix=windows
                  --verbosity=debug
@@ -49,9 +49,9 @@ after_test:
 - ps: >-
     if (-not $env:APPVEYOR_PULL_REQUEST_NUMBER ) {
       if ($env:APPVEYOR_REPO_BRANCH -eq "master" ) {
-        stack exec -- cache-s3 --prefix=$env:APPVEYOR_PROJECT_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows -v debug save stack
+        stack exec -- cache-s3 --prefix=$env:APPVEYOR_REPO_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows -v debug save stack
       }
-      stack exec -- cache-s3 --prefix=$env:APPVEYOR_PROJECT_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows -v debug save stack work
+      stack exec -- cache-s3 --prefix=$env:APPVEYOR_REPO_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows -v debug save stack work
     }
 # Upload an executable to the release for every git tag
 - ps: >-
