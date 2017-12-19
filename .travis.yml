@@ -16,8 +16,8 @@ matrix:
 
   # Build on macOS in addition to Linux
   # (for now MacOS is unsupported: issue with static linking)
-  # - compiler: ": #stack default osx"
-  #   os: osx
+  - compiler: ": #stack default osx"
+    os: osx
 
 before_install:
 # Download and unpack the stack executable
