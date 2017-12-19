@@ -31,7 +31,7 @@ before_install:
     travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
   fi
   if [ -n "$CACHE_S3_VERSION" ]; then
-    travis_retry curl -f -L https://github.com/fpco/cache-s3/releases/download/$CACHE_S3_VERSION/cache-s3-CACHE_S3_VERSION-$TRAVIS_OS_NAME-x86_64.tar.gz | tar xz -C ~/.local/bin 'cache-s3'
+    travis_retry curl -f -L https://github.com/fpco/cache-s3/releases/download/$CACHE_S3_VERSION/cache-s3-$CACHE_S3_VERSION-$TRAVIS_OS_NAME-x86_64.tar.gz | tar xz -C ~/.local/bin 'cache-s3'
     if [ ! $? = 0 ]; then
       cache-s3 --prefix=$TRAVIS_REPO_SLUG \
                --git-branch="$TRAVIS_BRANCH" \
@@ -85,10 +85,10 @@ after_success:
                                          --verbosity=debug \
                                          save stack work
     if [ -n "$TRAVIS_TAG" ]; then
-      travis_retry curl -L https://github.com/tfausak/github-release/releases/download/$env:GITHUB_RELEASE_VERSION/github-release-$GITHUB_RELEASE_VERSION-$TRAVIS_OS_NAME.gz | gunzip > github-release
+      travis_retry curl -L https://github.com/tfausak/github-release/releases/download/$GITHUB_RELEASE_VERSION/github-release-$GITHUB_RELEASE_VERSION-$TRAVIS_OS_NAME.gz | gunzip > github-release
       chmod a+x github-release
       stack exec -- cp $(which cache-s3) .
       tar -czf cache-s3.tar.gz cache-s3
-      .\github-release upload --token=$GITHUB_TOKEN --repo=$TRAVIS_REPO_SLUG --file=cache-s3.tar.gz --tag=$TRAVIS_TAG --name=cache-s3-$TRAVIS_TAG-$TRAVIS_OS_NAME-x86_64.tar.gz
+      ./github-release upload --token=$GITHUB_TOKEN --repo=$TRAVIS_REPO_SLUG --file=cache-s3.tar.gz --tag=$TRAVIS_TAG --name=cache-s3-$TRAVIS_TAG-$TRAVIS_OS_NAME-x86_64.tar.gz
     fi
   fi
