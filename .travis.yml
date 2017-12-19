@@ -52,7 +52,7 @@ after_success:
   if [ "$TRAVIS_PULL_REQUEST" = false ]; then
     echo "TRAVIS_PULL_REQUEST: $TRAVIS_PULL_REQUEST"
     if [ "$TRAVIS_BRANCH" = master ]; then
-      stack --no-termninal exec -- cache-s3 --prefix=$TRAVIS_REPO_SLUG \
+      stack --no-terminal exec -- cache-s3 --prefix=$TRAVIS_REPO_SLUG \
                                             --git-branch="$TRAVIS_BRANCH" \
                                             --suffix="$TRAVIS_OS_NAME" \
                                             --verbosity=debug \
