@@ -17,9 +17,9 @@ module Network.AWS.S3.Cache (
   , module Network.AWS.S3.Cache.Types
   ) where
 
+import           Control.Exception.Safe       (MonadCatch)
 import           Control.Lens
 import           Control.Monad                (when)
-import           Control.Monad.Catch
 import           Control.Monad.Logger         as L
 import           Control.Monad.Reader
 import           Control.Monad.Trans.AWS

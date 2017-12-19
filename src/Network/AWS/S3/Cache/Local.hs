@@ -15,7 +15,7 @@
 module Network.AWS.S3.Cache.Local where
 
 import           Control.Monad                (void)
-import           Control.Monad.Catch          (MonadCatch)
+import           Control.Exception.Safe          (MonadCatch)
 import           Control.Monad.IO.Class       (liftIO)
 import           Control.Monad.Logger
 import           Control.Monad.Trans.Resource (MonadResource, ResourceT)

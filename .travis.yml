@@ -12,7 +12,7 @@ matrix:
   include:
   # Build on linux
   - compiler: ": #stack default"
-    addons: {apt: {packages: [libgmp-dev, libnss3, libnss-lwres, libnss-mdns]}}
+    addons: {apt: {packages: [libgmp-dev, ca-certificates, libnss3, libnss-lwres, libnss-mdns]}}
 
   # Build on macOS in addition to Linux
   # (for now MacOS is unsupported: issue with static linking)

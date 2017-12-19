@@ -34,7 +34,7 @@ library
                      , cryptonite
                      , cryptonite-conduit
                      , directory >= 1.3.0.0
-                     , exceptions
+                     , safe-exceptions
                      , fast-logger >= 2.1.0
                      , filepath
                      , git

@@ -15,6 +15,7 @@
 --
 module Network.AWS.S3.Cache.Remote where
 
+import           Control.Exception.Safe
 import           Control.Lens
 import           Control.Monad.Logger                 as L
 import           Control.Monad.Reader
@@ -26,8 +27,6 @@ import           Crypto.Hash                          (Digest, HashAlgorithm,
 import           Data.ByteArray                       as BA
 import           Data.ByteString                      as S
 import           Data.ByteString.Base64               as S64
-import           Data.ByteString.Builder              (toLazyByteString)
-import           Data.ByteString.Lazy                 as SL
 import           Data.Conduit
 import           Data.Conduit.Binary
 import           Data.Conduit.List                    as CL
@@ -39,18 +38,18 @@ import           Data.Text                            as T
 import           Data.Text.Encoding                   as T
 import           Data.Text.Encoding.Error             as T
 import           Data.Time
-import           Data.Typeable
 import           Data.Word                            (Word64)
 import           Network.AWS
 import           Network.AWS.Data.Body
-import           Network.AWS.Data.Log                 (build)
+import           Network.AWS.Data.Text                (toText)
 import           Network.AWS.S3.Cache.Types
 import           Network.AWS.S3.CreateMultipartUpload
 import           Network.AWS.S3.DeleteObject
 import           Network.AWS.S3.GetObject
 import           Network.AWS.S3.StreamingUpload
 import           Network.AWS.S3.Types
-import           Network.HTTP.Types.Status            (status404)
+import           Network.HTTP.Types.Status            (Status (statusMessage),
+                                                       status404)
 import           Prelude                              as P
 import           System.IO                            (Handle)
 
@@ -71,10 +70,9 @@ hasCacheChanged newHash = do
   c <- ask
   let getObjReq = getObject (c ^. bucketName) (c ^. objectKey)
       hashKey = getHashMetaKey newHash
-      onErr err = do
-        case err of
-          ServiceError se
-            | se ^. serviceStatus == status404 -> do
+      onErr status = do
+        case () of
+          () | status == status404 -> do
               logAWS LevelInfo "No previously stored cache was found."
               return (Nothing, Nothing)
           _ -> return (Just LevelError, Nothing)
@@ -192,10 +190,9 @@ downloadCache ::
 downloadCache sink = do
   c <- ask
   let getObjReq = getObject (c ^. bucketName) (c ^. objectKey)
-      onErr err = do
-        case err of
-          ServiceError se
-            | se ^. serviceStatus == status404 -> do
+      onErr status = do
+        case () of
+          () | status == status404 -> do
               logAWS LevelInfo "No previously stored cache was found."
               MaybeT $ return Nothing
           _ -> return (Just LevelError, ())
@@ -252,7 +249,7 @@ downloadCache sink = do
 sendAWS ::
      (MonadReader r m, MonadResource m, HasEnv r, AWSRequest a, MonadLogger m)
   => a
-  -> (Error -> m (Maybe L.LogLevel, b))
+  -> (Status -> m (Maybe L.LogLevel, b))
   -> (Rs a -> m b)
   -> m b
 sendAWS req = runLoggingAWS (send req)
@@ -277,17 +274,30 @@ runLoggingAWS_ action = runLoggingAWS action (const $ pure (Just LevelError, ())
 -- | General helper for calling AWS and conditionally log the outcome upon a received error.
 runLoggingAWS
   :: (MonadReader r m, MonadResource m, HasEnv r, MonadLogger m) =>
-     AWS t -> (Error -> m (Maybe L.LogLevel, b)) -> (t -> m b) -> m b
+     AWS t -> (Status -> m (Maybe L.LogLevel, b)) -> (t -> m b) -> m b
 runLoggingAWS action onErr onSucc = do
   env <- ask
   eResp <- runAWS env $ trying _Error $ action
   case eResp of
     Left err -> do
-      (mLevel, def) <- onErr err
+      (errMsg, status) <-
+        case err of
+          TransportError exc -- @(HttpException req content) -> do
+           -> do
+            logErrorN "Critical HTTPException"
+            throwM exc
+          SerializeError serr -> return (T.pack (serr ^. serializeMessage), serr ^. serializeStatus)
+          ServiceError serr -> do
+            let status = serr ^. serviceStatus
+                errMsg =
+                  maybe
+                    (T.decodeUtf8With T.lenientDecode $ statusMessage status)
+                    toText
+                    (serr ^. serviceMessage)
+            return (errMsg, status)
+      (mLevel, def) <- onErr status
       case mLevel of
-        Just level ->
-          logOtherN level $
-          T.decodeUtf8With T.lenientDecode $ SL.toStrict $ toLazyByteString $ build err
+        Just level -> logOtherN level errMsg
         Nothing -> return ()
       return def
     Right suc -> onSucc suc
