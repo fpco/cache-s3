@@ -24,21 +24,11 @@ before_test:
 - cp stack.exe %APPDATA%\local\bin\stack.exe
 
 - ps: >-
-    if ( $env:CACHE_S3_VERSION ) {
+    if (-not ("$env:CACHE_S3_VERSION" -eq "" )) {
       Start-FileDownload https://github.com/fpco/cache-s3/releases/download/$env:CACHE_S3_VERSION/cache-s3-$env:CACHE_S3_VERSION-windows-x86_64.zip -FileName cache-s3.zip
       7z x cache-s3.zip cache-s3.exe
-      .\cache-s3 --prefix=$env:APPVEYOR_REPO_NAME
-                 --git-branch=$env:APPVEYOR_REPO_BRANCH
-                 --suffix=windows
-                 --verbosity=debug
-                 restore
-                 stack --base-branch=master
-      .\cache-s3 --prefix=$env:APPVEYOR_REPO_NAME
-                 --git-branch=$env:APPVEYOR_REPO_BRANCH
-                 --suffix=windows
-                 --verbosity=debug
-                 restore
-                 stack work --base-branch=master
+      .\cache-s3 --prefix=$env:APPVEYOR_REPO_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows --verbosity=debug restore stack --base-branch=master
+      .\cache-s3 --prefix=$env:APPVEYOR_REPO_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows --verbosity=debug restore stack work --base-branch=master
     }
 
 
@@ -68,7 +58,7 @@ after_test:
 notifications:
   - provider: Email
     to:
-      - lehins@yandex.ru
+      - alxey@fpcomplete.com
     on_build_success: false
     on_build_failure: false
     on_build_status_changed: true
