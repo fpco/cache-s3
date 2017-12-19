@@ -32,8 +32,8 @@ import           Data.Conduit
 import           Data.Conduit.Binary
 import           Data.Conduit.List                    as CL
 import           Data.HashMap.Strict                  as HM
+import           Data.Maybe
 import           Data.Monoid                          ((<>))
-import Data.Maybe
 import           Data.Ratio                           ((%))
 import           Data.Text                            as T
 import           Data.Text.Encoding                   as T
@@ -54,10 +54,6 @@ import           Network.HTTP.Types.Status            (status404)
 import           Prelude                              as P
 import           System.IO                            (Handle)
 
--- #if !WINDOWS
--- import qualified Formatting                           as F (bytes, fixed,
---                                                             sformat, (%))
--- #endif
 
 hasCacheChanged ::
      ( MonadReader r m

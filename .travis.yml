@@ -2,11 +2,17 @@ sudo: true
 
 # Do not choose a language; we provide our own build tools.
 language: generic
+
+cache:
+  directories:
+  - $HOME/.stack
+  - $TRAVIS_BUILD_DIR/.stack-work
+
 matrix:
   include:
   # Build on linux
   - compiler: ": #stack default"
-    addons: {apt: {packages: [libgmp-dev]}}
+    addons: {apt: {packages: [libgmp-dev, libnss3, libnss-lwres, libnss-mdns]}}
 
   # Build on macOS in addition to Linux
   # (for now MacOS is unsupported: issue with static linking)
@@ -44,14 +50,15 @@ script:
     sudo rm crtbeginT.o
     sudo cp crtbeginS.o crtbeginT.o
     cd $TRAVIS_BUILD_DIR
+    stack --no-terminal install --ghc-options='-optl-static -optl-pthread -fPIC'
+  else
+    stack --no-terminal install
   fi
-  stack --no-terminal install --ghc-options='-optl-static -optl-pthread -fPIC'
   set +ex
 
 after_success:
 - | # Do not cache PRs
   if [ "$TRAVIS_PULL_REQUEST" = false ]; then
-    echo "TRAVIS_PULL_REQUEST: $TRAVIS_PULL_REQUEST"
     if [ "$TRAVIS_BRANCH" = master ]; then
       stack --no-terminal exec -- cache-s3 --prefix=$TRAVIS_REPO_SLUG \
                                             --git-branch="$TRAVIS_BRANCH" \
