@@ -50,7 +50,7 @@ script:
     sudo rm crtbeginT.o
     sudo cp crtbeginS.o crtbeginT.o
     cd $TRAVIS_BUILD_DIR
-    stack --no-terminal install --ghc-options='-optl-static -optl-pthread -fPIC'
+    stack --no-terminal install # --ghc-options='-optl-static -optl-pthread -fPIC'
   else
     stack --no-terminal install
   fi

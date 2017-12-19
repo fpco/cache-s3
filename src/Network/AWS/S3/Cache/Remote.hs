@@ -61,6 +61,7 @@ hasCacheChanged ::
      , HasBucketName r BucketName
      , HasObjectKey r ObjectKey
      , HasEnv r
+     , HasMinLogLevel r L.LogLevel
      , HashAlgorithm h
      , Typeable h
      )
@@ -110,6 +111,7 @@ decodeHash hashTxt =
 uploadCache ::
      ( MonadReader r m
      , HasEnv r
+     , HasMinLogLevel r L.LogLevel
      , HasObjectKey r ObjectKey
      , HasBucketName r BucketName
      , MonadResource m
@@ -165,6 +167,7 @@ deleteCache ::
      , MonadLoggerIO m
      , MonadReader c m
      , HasEnv c
+     , HasMinLogLevel c L.LogLevel
      , HasObjectKey c ObjectKey
      , HasBucketName c BucketName
      )
@@ -181,11 +184,12 @@ downloadCache ::
      , MonadLoggerIO m
      , MonadReader c m
      , HasEnv c
+     , HasMinLogLevel c L.LogLevel
      , HasObjectKey c ObjectKey
      , HasBucketName c BucketName
      )
   => (forall h. HashAlgorithm h =>
-       Compression -> h -> Sink S.ByteString (ResourceT IO) (Digest h))
+                  Compression -> h -> Sink S.ByteString (ResourceT IO) (Digest h))
   -> MaybeT m ()
 downloadCache sink = do
   c <- ask
@@ -247,7 +251,14 @@ downloadCache sink = do
 -- invoked whenever an error occurs, which suppose to return some sort of default value and the
 -- `L.LogLevel` this error corresponds to.
 sendAWS ::
-     (MonadReader r m, MonadResource m, HasEnv r, AWSRequest a, MonadLogger m)
+     ( MonadReader r m
+     , MonadResource m
+     , HasEnv r
+     , HasMinLogLevel r L.LogLevel
+     , HasObjectKey r ObjectKey
+     , AWSRequest a
+     , MonadLogger m
+     )
   => a
   -> (Status -> m (Maybe L.LogLevel, b))
   -> (Rs a -> m b)
@@ -258,7 +269,14 @@ sendAWS req = runLoggingAWS (send req)
 -- | Same as `sendAWS`, but discard the response and simply error out on any received AWS error
 -- responses.
 sendAWS_ ::
-     (MonadReader r m, MonadResource m, HasEnv r, AWSRequest a, MonadLogger m)
+     ( MonadReader r m
+     , MonadResource m
+     , HasEnv r
+     , HasMinLogLevel r L.LogLevel
+     , HasObjectKey r ObjectKey
+     , AWSRequest a
+     , MonadLogger m
+     )
   => a
   -> (Rs a -> m ())
   -> m ()
@@ -266,25 +284,42 @@ sendAWS_ req = runLoggingAWS (send req) (const $ return (Just LevelError, ()))
 
 
 -- | Report every problem as `LevelError` and discard the result.
-runLoggingAWS_ :: (MonadReader r m, MonadResource m, HasEnv r, MonadLogger m) =>
-                  AWS () -> m ()
+runLoggingAWS_ ::
+     ( MonadReader r m
+     , MonadResource m
+     , HasEnv r
+     , HasMinLogLevel r L.LogLevel
+     , HasObjectKey r ObjectKey
+     , MonadLogger m
+     )
+  => AWS ()
+  -> m ()
 runLoggingAWS_ action = runLoggingAWS action (const $ pure (Just LevelError, ())) return
 
 
 -- | General helper for calling AWS and conditionally log the outcome upon a received error.
-runLoggingAWS
-  :: (MonadReader r m, MonadResource m, HasEnv r, MonadLogger m) =>
-     AWS t -> (Status -> m (Maybe L.LogLevel, b)) -> (t -> m b) -> m b
+runLoggingAWS ::
+     ( MonadReader r m
+     , MonadResource m
+     , HasEnv r
+     , HasMinLogLevel r L.LogLevel
+     , HasObjectKey r ObjectKey
+     , MonadLogger m
+     )
+  => AWS t
+  -> (Status -> m (Maybe L.LogLevel, b))
+  -> (t -> m b)
+  -> m b
 runLoggingAWS action onErr onSucc = do
-  env <- ask
-  eResp <- runAWS env $ trying _Error $ action
+  conf <- ask
+  eResp <- runAWS conf $ trying _Error $ action
   case eResp of
     Left err -> do
       (errMsg, status) <-
         case err of
-          TransportError exc -- @(HttpException req content) -> do
-           -> do
-            logErrorN "Critical HTTPException"
+          TransportError exc -> do
+            unless ((conf ^. minLogLevel) == L.LevelDebug) $
+              logAWS LevelError "Critical HTTPException"
             throwM exc
           SerializeError serr -> return (T.pack (serr ^. serializeMessage), serr ^. serializeStatus)
           ServiceError serr -> do
@@ -297,7 +332,7 @@ runLoggingAWS action onErr onSucc = do
             return (errMsg, status)
       (mLevel, def) <- onErr status
       case mLevel of
-        Just level -> logOtherN level errMsg
+        Just level -> logAWS level errMsg
         Nothing -> return ()
       return def
     Right suc -> onSucc suc

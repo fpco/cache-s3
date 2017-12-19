@@ -102,7 +102,9 @@ commonArgsParser version mS3Bucket =
   (option
      readLogLevel
      (long "verbosity" <> short 'v' <> value LevelInfo <>
-      help "Verbosity level (debug|info|warn|error). Default level is 'info'.")) <*>
+      help "Verbosity level (debug|info|warn|error). Default level is 'info'. \
+           \IMPORTANT: Level 'debug' can leak sensitive request information, thus \
+           \should NOT be used in production.")) <*>
   (switch
      (long "concise" <> short 'c' <>
       help "Shorten the output by removing timestamp and name of the tool.")) <*
