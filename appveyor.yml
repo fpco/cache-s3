@@ -13,7 +13,7 @@ environment:
 
 before_test:
 # Avoid long paths not to reach MAX_PATH of 260 chars
-- xcopy /q /s /e /r /k /i /v /h /y C:\projects\cache-s3 "%WORK_DIR%"
+- xcopy /q /s /e /r /k /i /v /h /y "%APPVEYOR_BUILD_FOLDER%" "%WORK_DIR%"
 - cd "%WORK_DIR%"
 
 # Install stack
