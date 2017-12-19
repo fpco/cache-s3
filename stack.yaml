@@ -3,7 +3,7 @@ packages:
 - .
 - location:
     git: https://github.com/lehins/tar-conduit
-    commit: 7ffdb1bb85e9d45e49977e16ca31dee6bea3d6f3
+    commit: 76129dd459de628d10565513b16d16647f1782a4
   extra-dep: true
 extra-deps:
 - temporary-resourcet-0.1.0.0
