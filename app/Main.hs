@@ -261,7 +261,7 @@ main = do
     info
       (Args <$> commonArgsParser cacheS3Version s3Bucket <*> actionParser <*
        abortOption ShowHelpText (long "help" <> short 'h' <> help "Display this message."))
-      (header "cache-s3 - Use AWS S3 bucket as cache for your build environment" <>
+      (header "cache-s3 - Use an AWS S3 bucket for caching your build environment" <>
        progDesc
          ("Save local directories to S3 bucket and restore them later to their original \
           \locations. AWS credentials will be extracted form the environment in a similar \

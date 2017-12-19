@@ -1,7 +1,7 @@
 # cache-s3
 
 This is tool is designed to store files, which were produced during a CI build, to an S3 bucket, so
-they can be used by subsequent builds. Although this tool is is tailored specifically for `stack`,
+they can be used by subsequent builds. Although this tool is tailored specifically for `stack`,
 it is by no means limited to Haskell or `stack` users.
 
 `cache-s3` is not simply a wrapper around a bunch of other tools, it is all written in Haskell,
