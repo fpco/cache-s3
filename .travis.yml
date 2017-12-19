@@ -30,18 +30,20 @@ before_install:
   else
     travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
   fi
-  if [ -n "$CACHE_S3_VERSION"]; then
+  if [ -n "$CACHE_S3_VERSION" ]; then
     travis_retry curl -f -L https://github.com/fpco/cache-s3/releases/download/$CACHE_S3_VERSION/cache-s3-CACHE_S3_VERSION-$TRAVIS_OS_NAME-x86_64.tar.gz | tar xz -C ~/.local/bin 'cache-s3'
-    cache-s3 --prefix=$TRAVIS_REPO_SLUG \
-             --git-branch="$TRAVIS_BRANCH" \
-             --suffix="$TRAVIS_OS_NAME" \
-             --verbosity=debug
-             restore stack --base-branch=master
-    cache-s3 --prefix=$TRAVIS_REPO_SLUG \
-             --git-branch="$TRAVIS_BRANCH" \
-             --suffix="$TRAVIS_OS_NAME" \
-             --verbosity=debug
-             restore stack work --base-branch=master
+    if [ ! $? = 0 ]; then
+      cache-s3 --prefix=$TRAVIS_REPO_SLUG \
+               --git-branch="$TRAVIS_BRANCH" \
+               --suffix="$TRAVIS_OS_NAME" \
+               --verbosity=debug \
+               restore stack --base-branch=master
+      cache-s3 --prefix=$TRAVIS_REPO_SLUG \
+               --git-branch="$TRAVIS_BRANCH" \
+               --suffix="$TRAVIS_OS_NAME" \
+               --verbosity=debug \
+               restore stack work --base-branch=master
+    fi
   fi
 
 install:
