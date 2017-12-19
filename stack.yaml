@@ -1,10 +1,9 @@
 resolver: nightly-2017-12-08
 packages:
 - .
-#- ../tar-conduit
 - location:
     git: https://github.com/lehins/tar-conduit
-    commit: 7d934567d1017256abd8c6c58e8b9eb6ae298df5
+    commit: 7ffdb1bb85e9d45e49977e16ca31dee6bea3d6f3
   extra-dep: true
 extra-deps:
 - temporary-resourcet-0.1.0.0

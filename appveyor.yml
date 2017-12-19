@@ -23,20 +23,23 @@ before_test:
 - 7z x stack.zip stack.exe
 - cp stack.exe %APPDATA%\local\bin\stack.exe
 
-- ps: Start-FileDownload https://github.com/lehins/cache-s3/releases/download/latest/cache-s3-latest-windows-x86_64.zip -FileName cache-s3.zip
-- ps: 7z x cache-s3.zip cache-s3.exe
-- ps: .\cache-s3 --prefix=$env:APPVEYOR_REPO_NAME
+- ps: >-
+    if ( $env:CACHE_S3_VERSION ) {
+      Start-FileDownload https://github.com/fpco/cache-s3/releases/download/$env:CACHE_S3_VERSION/cache-s3-$env:CACHE_S3_VERSION-windows-x86_64.zip -FileName cache-s3.zip
+      7z x cache-s3.zip cache-s3.exe
+      .\cache-s3 --prefix=$env:APPVEYOR_REPO_NAME
                  --git-branch=$env:APPVEYOR_REPO_BRANCH
                  --suffix=windows
                  --verbosity=debug
                  restore
                  stack --base-branch=master
-- ps: .\cache-s3 --prefix=$env:APPVEYOR_REPO_NAME
+      .\cache-s3 --prefix=$env:APPVEYOR_REPO_NAME
                  --git-branch=$env:APPVEYOR_REPO_BRANCH
                  --suffix=windows
                  --verbosity=debug
                  restore
                  stack work --base-branch=master
+    }
 
 
 test_script:
@@ -47,8 +50,8 @@ test_script:
 
 after_test:
 - ps: >-
-    if (-not $env:APPVEYOR_PULL_REQUEST_NUMBER ) {
-      if ($env:APPVEYOR_REPO_BRANCH -eq "master" ) {
+    if ( -not $env:APPVEYOR_PULL_REQUEST_NUMBER ) {
+      if ( $env:APPVEYOR_REPO_BRANCH -eq "master" ) {
         stack exec -- cache-s3 --prefix=$env:APPVEYOR_REPO_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows -v debug save stack
       }
       stack exec -- cache-s3 --prefix=$env:APPVEYOR_REPO_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows -v debug save stack work
@@ -61,7 +64,6 @@ after_test:
       cp $env:APPDATA\local\bin\cache-s3.exe cache-s3.exe
       7z a cache-s3.zip cache-s3.exe
       .\github-release upload --token=$env:GITHUB_TOKEN --repo=$env:APPVEYOR_REPO_NAME --file=cache-s3.zip --tag=$env:APPVEYOR_REPO_TAG_NAME --name=cache-s3-$env:APPVEYOR_REPO_TAG_NAME-windows_x64-86.zip
-      .\github-release upload --token=$env:GITHUB_TOKEN --repo=$env:APPVEYOR_REPO_NAME --file=cache-s3.zip --tag=latest --name=cache-s3-latest-windows_x64-86.zip
     }
 notifications:
   - provider: Email
