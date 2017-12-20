@@ -72,13 +72,11 @@ script:
 after_success:
 - | # Do not cache PRs
   if [ "$TRAVIS_PULL_REQUEST" = false ]; then
-    if [ "$TRAVIS_BRANCH" = master ]; then
-      stack --no-terminal exec -- cache-s3 --prefix=$TRAVIS_REPO_SLUG \
+    stack --no-terminal exec -- cache-s3 --prefix=$TRAVIS_REPO_SLUG \
                                             --git-branch="$TRAVIS_BRANCH" \
                                             --suffix="$TRAVIS_OS_NAME" \
                                             --verbosity=debug \
                                             save stack
-    fi
     stack --no-terminal exec -- cache-s3 --prefix=$TRAVIS_REPO_SLUG \
                                          --git-branch="$TRAVIS_BRANCH" \
                                          --suffix="$TRAVIS_OS_NAME" \
