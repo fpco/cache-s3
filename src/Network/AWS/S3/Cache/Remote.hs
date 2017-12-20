@@ -119,9 +119,9 @@ uploadCache ::
      , HashAlgorithm h
      , Typeable h
      )
-  => (Handle, Word64, Digest h, Compression)
+  => Bool -> (Handle, Word64, Digest h, Compression)
   -> m ()
-uploadCache (hdl, cSize, newHash, comp) = do
+uploadCache isPublic (hdl, cSize, newHash, comp) = do
   c <- ask
   hasChanged <- hasCacheChanged newHash
   if hasChanged
@@ -134,7 +134,7 @@ uploadCache (hdl, cSize, newHash, comp) = do
               [ (hashAlgorithmMetaKey, hashKey)
               , (hashKey, newHashTxt)
               , (compressionMetaKey, getCompressionName comp)
-              ]
+              ] & if isPublic then cmuACL .~ Just OPublicRead else id
       logAWS LevelInfo $
         "Data change detected, caching " <> formatBytes (fromIntegral cSize) <> " with " <> hashKey <>
         ": " <>

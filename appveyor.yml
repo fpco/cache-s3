@@ -58,7 +58,7 @@ after_test:
 notifications:
   - provider: Email
     to:
-      - alxey@fpcomplete.com
+      - alexey@fpcomplete.com
     on_build_success: false
     on_build_failure: false
     on_build_status_changed: true

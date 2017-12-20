@@ -1,6 +1,6 @@
 # cache-s3
 
-This is tool is designed to store files, which were produced during a CI build, to an S3 bucket, so
+This tool is designed to store files, which were produced during a CI build, to an S3 bucket, so
 they can be used by subsequent builds. Although this tool is tailored specifically for `stack`,
 it is by no means limited to Haskell or `stack` users.
 
@@ -32,7 +32,7 @@ AppVeyor, CircleCI, etc. Here are the limitations with CI providers that address
 
 * Usage ain't free, gotta pay Amazon for S3.
 * Saving and restoring cache will likely be slightly slower than CI provider's native solution,
-  since data has to move over internet.
+  since data has to move over the Internet.
 
 
 ## Usage

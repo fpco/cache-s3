@@ -76,6 +76,7 @@ data SaveArgs = SaveArgs
   { savePaths       :: ![FilePath]
   , saveHash        :: !Text
   , saveCompression :: !Compression
+  , savePublic      :: !Bool
   } deriving (Show)
 
 data SaveStackArgs = SaveStackArgs

@@ -126,7 +126,12 @@ saveArgsParser paths =
     (long "compression" <> value GZip <>
      help
        ("Compression algorithm to use for cache. Default 'gzip'. Supported: " <>
-        T.unpack supportedCompression))
+        T.unpack supportedCompression)) <*>
+  (switch
+     (long "public" <>
+      help "Make cache publicly readable. IMPORTANT: Make sure you know what you are \
+           \doing when using this flag as it will lead to cache be readable by \
+           \anonymous users, which will in turn also result in charges by AWS."))
 
 
 restoreArgsParser :: Parser RestoreArgs
