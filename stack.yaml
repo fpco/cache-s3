@@ -3,7 +3,7 @@ packages:
 - .
 - location:
     git: https://github.com/lehins/tar-conduit
-    commit: 76129dd459de628d10565513b16d16647f1782a4
+    commit: e29dcbe7185d26220d5dbcc6c7ba181334b25eb9
   extra-dep: true
 extra-deps:
 - amazonka-1.4.5
