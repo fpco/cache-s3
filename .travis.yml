@@ -66,7 +66,7 @@ script:
   # else
   #   stack --no-terminal install --force-dirty
   # fi
-  stack --no-terminal install
+  stack --no-terminal install --force-dirty --ghc-options='-optl-static -optl-pthread -fPIC'
   set +ex
 
 after_success:
