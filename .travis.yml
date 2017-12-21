@@ -4,6 +4,7 @@ sudo: true
 language: generic
 
 cache:
+  timeout: 1000
   directories:
   - $HOME/.stack
   - $TRAVIS_BUILD_DIR/.stack-work
