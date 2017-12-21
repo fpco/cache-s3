@@ -8,7 +8,6 @@ it is by no means limited to Haskell or `stack` users.
 which comes with a great benefit of being cross platform. Executable versions for common operating
 systems can be downloaded from github [releases](https://github.com/fpco/cache-s3/releases) page.
 
-
 ## Problems it solves
 
 CI providers already have some form of caching capability in place, so natural question comes to
@@ -37,6 +36,10 @@ AppVeyor, CircleCI, etc. Here are the limitations with CI providers that address
 
 ## Usage
 
+There is an implicit assumption in this document that the user knows how to configure communication
+with AWS from the command line (credentials, roles, accounts, regions, etc.), same as with `aws-cli`
+for example. There are plenty of guides online how to get this setup.
+
 ### Prepare CI and S3
 
 In order for the tool to work, an S3 bucket must already be setup on AWS. I would recommend setting
@@ -46,48 +49,55 @@ ephemeral branches will be discarded, hence avoiding unnecessary storage costs. 
 separate user that has full access only to that bucket is also a must. Easiest way to get
 all of this done is with help of [terraform](https://www.terraform.io/downloads.html):
 
+Most of the boiler plate has been taking care of by the reusable terraform module
+[ci-cache-s3](https://github.com/fpco/fpco-terraform-aws/tree/master/tf-modules/ci-cache-s3).
+All that is necessary is creating a `main.tf` file with this content:
+
 ```hcl
-variable "user_name" {
-  description = "Username that will receive full access to the newly created S3 bucket"
+module "ci-cache" {
+  source  = "github.com/fpco/fpco-terraform-aws//tf-modules/ci-cache-s3"
+  prefix  = "my-cache-" # <-- make sure to set this to a custom value.
+  pgp_key = "keybase:user_name" # <-- or some other local gpg key
 }
 
-variable "bucket_name" {
-  description = "Name for the S3 bucket that will hold the cache"
+output "bucket_name" {
+  value = "${module.ci-cache.bucket_name}"
 }
 
-resource "aws_s3_bucket" "bucket" {
-  bucket = "${var.bucket_name}"
-  acl    = "private"
-
-  lifecycle_rule {
-    id      = "cache"
-    prefix  = "cache-s3/"
-    enabled = true
-
-    expiration {
-      days = 7
-    }
-  }
+output "access_key" {
+  value = "${module.ci-cache.access_key}"
 }
 
-module "s3-full-access" {
-  source = "github.com/fpco/fpco-terraform-aws//tf-modules/s3-full-access-policy"
-  name = "cache-s3"
-  bucket_names = ["${aws_s3_bucket.bucket.id}"]
-}
-
-resource "aws_iam_user_policy_attachment" "s3-full-access-attachment" {
-    user       = "${var.user_name}"
-    policy_arn = "${module.s3-full-access.arn}"
+output "secret_key" {
+  value = "${module.ci-cache.secret_key}"
 }
 ```
 
-Then simply running command below will set up the bucket for you. Naturally, the user must be
-created manually prior to deploying the bucket.
+Then simply running commands below will set up the S3 bucket and IAM user with permissions to access
+it for you:
 
 ```
-$ terraform init; terraform apply -var 'user_name=cache-bucket-user' -var 'bucket_name=my-ci-cache'
+$ terraform init
+$ terraform plan
+$ terraform apply
 ```
+
+
+After you apply terrafom it will deploy all of the resource and print out the bucket name,
+`access_key` and an encrypted version of the `secret_key`. In order to get clear text verision of it
+run:
+
+```
+terraform output secret_key | base64 --decode | keybase pgp decrypt
+```
+
+You can inspect
+[ci-cache-s3/variables.tf](https://github.com/fpco/fpco-terraform-aws/tree/master/tf-modules/ci-cache-s3/variables.tf)
+file for a few extra variables that can be customized in the module.
+
+
+It is recommended to also setup a remote state for terraform, so it can be shared with all of your
+coworkers, but that's a totally separate discussion.
 
 _Read more on terraform if you'd like to avoid manual work in getting everything setup_:
 [terraform.io](https://www.terraform.io/intro/index.html))
