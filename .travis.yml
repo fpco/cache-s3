@@ -66,7 +66,8 @@ script:
   # else
   #   stack --no-terminal install --force-dirty
   # fi
-  stack --no-terminal install
+  (timeout 1800 stack --no-terminal install) || ([ $? = 124 ] && echo "Timed out after 30min so the build will have to picked up next time")
+  #stack --no-terminal install
   set +ex
 
 after_success:
