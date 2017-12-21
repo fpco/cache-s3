@@ -184,7 +184,6 @@ and
 $ cache-s3 restore stack work
 ```
 
-
 ### Clearing
 
 If for some reason there is a need to remove cache for particular build, all is necessary is to run
