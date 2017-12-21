@@ -27,8 +27,6 @@ before_install:
   if [ `uname` = "Darwin" ]
   then
     travis_retry curl --insecure -L https://www.stackage.org/stack/osx-x86_64 | tar xz --strip-components=1 --include '*/stack' -C ~/.local/bin
-    brew install coreutils || echo "Problem with installing coreutils"
-    alias timeout=gtimeout
   else
     travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
   fi
@@ -57,18 +55,17 @@ install:
 script:
 - |
   set -ex
-  # if [ "$TRAVIS_OS_NAME" = "linux" ]; then
-  #   # Workaroud for linker issue.
-  #   # See: https://www.fpcomplete.com/blog/2016/10/static-compilation-with-stack#crtbegint-swap
-  #   cd /usr/lib/gcc/x86_64-linux-gnu/4.8/
-  #   sudo rm crtbeginT.o
-  #   sudo cp crtbeginS.o crtbeginT.o
-  #   cd $TRAVIS_BUILD_DIR
-  #   stack --no-terminal install --force-dirty --ghc-options='-optl-static -optl-pthread -fPIC'
-  # else
-  #   stack --no-terminal install --force-dirty
-  # fi
-  (timeout 1800 stack --no-terminal install) || ([ $? = 124 ] && echo "Timed out after 30min so the build will have to picked up next time")
+  if [ "$TRAVIS_OS_NAME" = "linux" ]; then
+    # Workaroud for linker issue.
+    # See: https://www.fpcomplete.com/blog/2016/10/static-compilation-with-stack#crtbegint-swap
+    cd /usr/lib/gcc/x86_64-linux-gnu/4.8/
+    sudo rm crtbeginT.o
+    sudo cp crtbeginS.o crtbeginT.o
+    cd $TRAVIS_BUILD_DIR
+    (timeout 1800 stack --no-terminal install) || ([ $? = 124 ] && echo "Timed out after 30min so the build will have to picked up next time")
+  else
+    (gtimeout 1800 stack --no-terminal install) || ([ $? = 124 ] && echo "Timed out after 30min so the build will have to picked up next time")
+  fi
   #stack --no-terminal install
   set +ex
 
