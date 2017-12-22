@@ -33,7 +33,7 @@ before_install:
   fi
   if [ -n "$CACHE_S3_VERSION" ]; then
     travis_retry curl -f -L https://github.com/fpco/cache-s3/releases/download/$CACHE_S3_VERSION/cache-s3-$CACHE_S3_VERSION-$TRAVIS_OS_NAME-x86_64.tar.gz | tar xz -C ~/.local/bin 'cache-s3'
-    if [ ! $? = 0 ]; then
+    if [ -x $(readlink -f "~/.local/bin/cache-s3") ]; then
       cache-s3 --prefix=$TRAVIS_REPO_SLUG \
                --git-branch="$TRAVIS_BRANCH" \
                --suffix="$TRAVIS_OS_NAME" \
