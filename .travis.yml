@@ -3,11 +3,11 @@ sudo: true
 # Do not choose a language; we provide our own build tools.
 language: generic
 
-cache:
-  timeout: 1000
-  directories:
-  - $HOME/.stack
-  - $TRAVIS_BUILD_DIR/.stack-work
+# cache:
+#   timeout: 1000
+#   directories:
+#   - $HOME/.stack
+#   - $TRAVIS_BUILD_DIR/.stack-work
 
 matrix:
   include:
