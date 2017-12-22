@@ -63,9 +63,9 @@ script:
     sudo rm crtbeginT.o
     sudo cp crtbeginS.o crtbeginT.o
     cd $TRAVIS_BUILD_DIR
-    (timeout 1800 stack --no-terminal install) || ([ $? = 124 ] && echo "Timed out after 30min so the build will have to picked up next time")
+    (timeout 1800 stack --no-terminal install) || ([ $? = 124 ] && echo "Timed out after 30min so the build will have to be picked up next time")
   else
-    (gtimeout 1800 stack --no-terminal install) || ([ $? = 124 ] && echo "Timed out after 30min so the build will have to picked up next time")
+    (gtimeout 1800 stack --no-terminal install) || ([ $? = 124 ] && echo "Timed out after 30min so the build will have to be picked up next time")
   fi
   #stack --no-terminal install
   set +ex

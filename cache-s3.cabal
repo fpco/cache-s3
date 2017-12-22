@@ -1,7 +1,9 @@
 name:                cache-s3
-version:             0.1.0
--- synopsis:
--- description:
+version:             0.1.1
+synopsis:            Use an AWS S3 bucket for caching your stack build environment.
+description:         Save local directories to S3 bucket and restore them later to their
+                     original locations. Designed for stack usage during CI, but can be
+                     used with other tools and for other purposes.
 homepage:            https://github.com/fpco/cache-s3#readme
 license:             BSD3
 license-file:        LICENSE

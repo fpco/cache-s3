@@ -261,7 +261,7 @@ main :: IO ()
 main = do
   s3Bucket <- lookupEnv "S3_BUCKET"
   cFile <- credFile
-  _args@(Args commonArgs acts) <-
+  Args commonArgs acts <-
     execParser $
     info
       (Args <$> commonArgsParser cacheS3Version s3Bucket <*> actionParser <*
@@ -279,4 +279,3 @@ main = do
        fullDesc)
   hSetBuffering stdout LineBuffering
   runCacheS3 commonArgs acts
-  --print _args

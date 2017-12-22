@@ -50,14 +50,16 @@ separate user that has full access only to that bucket is also a must. Easiest w
 all of this done is with help of [terraform](https://www.terraform.io/downloads.html):
 
 Most of the boiler plate has been taking care of by the reusable terraform module
-[ci-cache-s3](https://github.com/fpco/fpco-terraform-aws/tree/master/tf-modules/ci-cache-s3).
-All that is necessary is creating a `main.tf` file with this content:
+[ci-cache-s3](https://github.com/fpco/fpco-terraform-aws/tree/master/tf-modules/ci-cache-s3). Although
+not strictly required, I would recommend setting up a [keybase.io](https://keybase.io/) account,
+but having a regular PGP key will do just fine. All that is necessary is creating a `main.tf` file
+with this content:
 
 ```hcl
 module "ci-cache" {
   source  = "github.com/fpco/fpco-terraform-aws//tf-modules/ci-cache-s3"
   prefix  = "my-cache-" # <-- make sure to set this to a custom value.
-  pgp_key = "keybase:user_name" # <-- or some other local gpg key
+  pgp_key = "keybase:user_name" # <-- or a base64 encoded PGP public key
 }
 
 output "bucket_name" {
@@ -83,7 +85,7 @@ $ terraform apply
 ```
 
 
-After you apply terrafom it will deploy all of the resource and print out the bucket name,
+After you apply terrafom it will deploy all of the resources and print out the bucket name,
 `access_key` and an encrypted version of the `secret_key`. In order to get clear text verision of it
 run:
 
@@ -97,7 +99,7 @@ file for a few extra variables that can be customized in the module.
 
 
 It is recommended to also setup a remote state for terraform, so it can be shared with all of your
-coworkers, but that's a totally separate discussion.
+co-workers, but that's a totally separate discussion.
 
 _Read more on terraform if you'd like to avoid manual work in getting everything setup_:
 [terraform.io](https://www.terraform.io/intro/index.html))
