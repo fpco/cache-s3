@@ -1,8 +1,8 @@
 # cache-s3
 
-This tool is designed to store files, which were produced during a CI build, to an S3 bucket, so
-they can be used by subsequent builds. Although this tool is tailored specifically for `stack`,
-it is by no means limited to Haskell or `stack` users.
+This tool is designed to store files, that were produced during a CI build, to an S3 bucket, so that
+they can be used by subsequent builds. Although this tool is tailored specifically for `stack`, it
+is by no means limited to Haskell or `stack` users.
 
 `cache-s3` is not simply a wrapper around a bunch of other tools, it is all written in Haskell,
 which comes with a great benefit of being cross platform. Executable versions for common operating
@@ -181,7 +181,7 @@ do change frequently with the project under active development. Here is how to c
 $ cache-s3 save stack work
 ```
 
-This will cache your `.stack-work` direcotry, or all of them, if your project consists of many
+This will cache your `.stack-work` directory, or all of them, if your project consists of many
 packages.
 
 Restoring stack cache is just as easy as regular one:
@@ -206,11 +206,11 @@ manually ispected for content, if some CI build failure debugging is necessary.
 
 ## Features
 
-* Data will not be uploaded to S3 if it has not chneged. By change here I don't mean only the
-  content of files, but also attributes of files and folder, such as modification time, changes in
+* Data will not be uploaded to S3 if it has not changed. By change here I don't mean only the
+  content of files, but also attributes of files and folders, such as modification time, changes in
   permisssions or ownership. So even `touch` of one of the files being cached will trigger an upload
   to S3.
 * Consistency of cache is verified when it's being restored.
-* Compression used is customizable. For now on Windows only gzip is available, gzip and lz4 on
+* Compression algorithm is customizable. For now on Windows only gzip is available, gzip and lz4 on
   others.
 * Default hashing algorithm SHA256 can also be overriden.
