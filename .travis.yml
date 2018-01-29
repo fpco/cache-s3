@@ -37,12 +37,10 @@ before_install:
       cache-s3 --prefix=$TRAVIS_REPO_SLUG \
                --git-branch="$TRAVIS_BRANCH" \
                --suffix="$TRAVIS_OS_NAME" \
-               --verbosity=debug \
                restore stack --base-branch=master
       cache-s3 --prefix=$TRAVIS_REPO_SLUG \
                --git-branch="$TRAVIS_BRANCH" \
                --suffix="$TRAVIS_OS_NAME" \
-               --verbosity=debug \
                restore stack work --base-branch=master
     fi
   fi
@@ -77,13 +75,11 @@ after_success:
       stack --no-terminal exec -- cache-s3 --prefix=$TRAVIS_REPO_SLUG \
                                             --git-branch="$TRAVIS_BRANCH" \
                                             --suffix="$TRAVIS_OS_NAME" \
-                                            --verbosity=debug \
                                             save stack
     fi
     stack --no-terminal exec -- cache-s3 --prefix=$TRAVIS_REPO_SLUG \
                                          --git-branch="$TRAVIS_BRANCH" \
                                          --suffix="$TRAVIS_OS_NAME" \
-                                         --verbosity=debug \
                                          save stack work
     if [ -n "$TRAVIS_TAG" ]; then
       travis_retry curl -L https://github.com/tfausak/github-release/releases/download/$GITHUB_RELEASE_VERSION/github-release-$GITHUB_RELEASE_VERSION-$TRAVIS_OS_NAME.gz | gunzip > github-release

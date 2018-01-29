@@ -2,8 +2,8 @@ resolver: lts-10.0
 packages:
 - .
 - location:
-    git: https://github.com/lehins/tar-conduit
-    commit: 76129dd459de628d10565513b16d16647f1782a4
+    git: https://github.com/snoyberg/tar-conduit
+    commit: 2d5f250e89776c8e4f68b13bdeacd36d27db0051
   extra-dep: true
 extra-deps:
 - amazonka-1.4.5
