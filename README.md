@@ -104,6 +104,32 @@ co-workers, but that's a totally separate discussion.
 _Read more on terraform if you'd like to avoid manual work in getting everything setup_:
 [terraform.io](https://www.terraform.io/intro/index.html))
 
+### Downloading an executable
+
+For every released version of `cache-s3` there will be an executable [uploaded to
+github](https://github.com/fpco/cache-s3/releases) for Windows, Linux and Mac OS.
+
+Linux binary is build on Ubuntu, but might work on others.  although in order for it to work
+[gmp](https://gmplib.org/) might need installed, which can be quickly installed on ubuntu `apt-get
+install libgmp-dev`.
+
+Here are examples on how to get `cahce-s3` into your CI environment:
+
+* Linux and Mac
+
+```
+CACHE_S3_VERSION="v0.1.1"
+OS_NAME=linux # can be set be CI, eg `TRAVIS_OS_NAME`
+curl -f -L https://github.com/fpco/cache-s3/releases/download/$CACHE_S3_VERSION/cache-s3-$CACHE_S3_VERSION-$OS_NAME-x86_64.tar.gz | tar xz -C ~/.local/bin 'cache-s3'
+```
+
+* On Windows in PowerShell
+
+```
+Start-FileDownload https://github.com/fpco/cache-s3/releases/download/$env:CACHE_S3_VERSION/cache-s3-$env:CACHE_S3_VERSION-windows-x86_64.zip -FileName cache-s3.zip
+7z x cache-s3.zip cache-s3.exe
+```
+
 ### CI Setup
 
 Every invocation of `cache-s3` requires S3 bucket name and AWS credentials to be present in the
