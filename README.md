@@ -86,7 +86,7 @@ $ terraform apply
 
 
 After you apply terrafom it will deploy all of the resources and print out the bucket name,
-`access_key` and an encrypted version of the `secret_key`. In order to get clear text verision of it
+`access_key` and an encrypted version of the `secret_key`. In order to get clear text version of it
 run:
 
 ```
@@ -152,7 +152,7 @@ Stack specific ones:
 * `STACK_YAML` - path to project configuration file (`--stack-yaml` cli argument)
 * `STACK_WORK` - use to rename `.stack-work` directory (`--stack-work` cli argument)
 
-Further examples will assume all of the AWS realted variables are set.
+Further examples will assume all of the AWS related variables are set.
 
 __Important__: If the same bucket is being used for many projects, make sure to set `--prefix`
 argument in order to place each of them in their own namespace and avoid cache clashes.
@@ -173,7 +173,7 @@ $ cache-s3 restore --base-branch=master
 ```
 
 Specifying base branch will let files be restored from another branch, like `master` in example
-above, if current branch doesn't yet have cache of it's own.
+above, if current branch doesn't yet have cache of its own.
 
 Files and directories are restored to the exact same places on the files systems they were
 before. Attributes, permissions and modification times are preserved. Symlinks are not followed, so
@@ -230,15 +230,15 @@ If for some reason there is a need to remove cache for particular build, all is 
 `cache-s3 clear`, `cache-s3 clear stack` or `cache-s3 clear stack work` with the same arguments that
 `cache restore` would be called with. Alternatively a file can be manually removed from an S3
 bucket. Despite that files on S3 have extension `.cache`, they are simple `.tar.gz` and can be
-manually ispected for content, if some CI build failure debugging is necessary.
+manually inspected for content, if some CI build failure debugging is necessary.
 
 ## Features
 
 * Data will not be uploaded to S3 if it has not changed. By change here I don't mean only the
   content of files, but also attributes of files and folders, such as modification time, changes in
-  permisssions or ownership. So even `touch` of one of the files being cached will trigger an upload
+  permissions or ownership. So even `touch` of one of the files being cached will trigger an upload
   to S3.
 * Consistency of cache is verified when it's being restored.
 * Compression algorithm is customizable. For now on Windows only gzip is available, gzip and lz4 on
   others.
-* Default hashing algorithm SHA256 can also be overriden.
+* Default hashing algorithm SHA256 can also be overridden.
