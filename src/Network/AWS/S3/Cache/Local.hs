@@ -22,7 +22,6 @@ import           Control.Monad.Trans.Resource (MonadResource, ResourceT)
 import           Crypto.Hash                  (Digest, HashAlgorithm)
 import           Crypto.Hash.Conduit
 import           Data.ByteString              as S
-import           Data.ByteString.Char8        as S8
 import           Data.Conduit
 import           Data.Conduit.Binary
 import           Data.Conduit.List            as C
@@ -37,6 +36,7 @@ import           Prelude                      as P
 import           System.Directory
 import           System.IO                    hiding (openTempFile)
 import           System.IO.Temp
+import           System.Process
 
 tarFiles :: (MonadCatch m, MonadResource m, MonadLogger m) =>
             [FilePath] -> ConduitM a ByteString m ()
@@ -97,12 +97,9 @@ restoreFilesFromCache ::
   => Compression -- ^ Compression algorithm the stream is expected to be compressed with.
   -> h -- ^ Hashing algorithm to use for computation of hash value of the extracted tarball.
   -> ConduitM ByteString Void (ResourceT IO) (Digest h)
-restoreFilesFromCache comp _ =
+restoreFilesFromCache comp _ = do
+  let untarCP = (proc "tar" ["-x", "-P"]) {std_in = CreatePipe}
+  (Just untarStdin, _, _, _) <- liftIO $ createProcess untarCP
   getDeCompressionConduit comp .|
-  getZipConduit (ZipConduit (untarWithFinalizers restoreFile') *> ZipConduit sinkHash)
-  where
-    restoreFile' fi = do
-      case fileType fi of
-        FTDirectory -> liftIO $ createDirectoryIfMissing True (S8.unpack (filePath fi))
-        _ -> return ()
-      restoreFile fi
+    getZipConduit
+      (ZipConduit (sinkHandle untarStdin) *> ZipConduit sinkHash)
