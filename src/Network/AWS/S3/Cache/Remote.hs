@@ -357,7 +357,10 @@ reportProgress reporter (thresh, stepSum, prevSum, prevTime) chunkSize
   | P.null thresh || curSum < curThresh = return (thresh, stepSum + chunkSize, curSum, prevTime)
   | otherwise = do
     curTime <- liftIO getCurrentTime
-    let speed = (toInteger (stepSum + chunkSize) % 1) / toRational (diffUTCTime curTime prevTime)
+    let delta = diffUTCTime curTime prevTime
+        speed = if delta == 0
+                then 0
+                else (toInteger (stepSum + chunkSize) % 1) / toRational delta
     _ <- reporter perc $ round (fromRational @Double speed)
     return (restThresh, 0, curSum, curTime)
   where

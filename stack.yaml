@@ -3,7 +3,7 @@ packages:
 - .
 - location:
     git: https://github.com/snoyberg/tar-conduit
-    commit: 81c8718d178514e8672744a5658d1307488a0f9b
+    commit: ac58871a069a8d4a3746595e27f72d74a132d94b
   extra-dep: true
 extra-deps:
 - amazonka-1.4.5
