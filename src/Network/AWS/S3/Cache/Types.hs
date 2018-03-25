@@ -135,10 +135,10 @@ data Action
   | ClearStackWork !StackProject
   deriving (Show)
 
+
 ----------------
 --- Time -------
 ----------------
-
 
 data Interval
   = Years Integer
@@ -156,7 +156,7 @@ formatDiffTime nd = go "" $ fmap Seconds $ divMod (round nd) 60
         (_, Years y)
           | y > 0 -> showTime y "year" ", " acc
         (n, Days d)
-          | d > 0 || n > 0 -> go (showTime d "day" ", " acc) $ (0, Years n)
+          | d > 0 || n > 0 -> go (showTime d "day" ", " acc) (0, Years n)
         (n, Hours h)
           | h > 0 || n > 0 -> go (showTime h "hour" ", " acc) $ fmap Days $ divMod n 365
         (n, Minutes m)

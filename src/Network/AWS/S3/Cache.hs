@@ -131,7 +131,7 @@ runCacheS3 ca@CommonArgs {..} action = do
       config <- mkConfig ca
       restoreSuccessfull <- restoreCache (config & maxAge .~ restoreMaxAge)
       case (restoreSuccessfull, restoreBaseBranch) of
-        (False, Just _) -> do
+        (False, Just _) | restoreBaseBranch /= commonGitBranch -> do
           let baseObjKey = mkObjectKey commonPrefix restoreBaseBranch commonSuffix
           void $
             restoreCache $
