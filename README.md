@@ -50,7 +50,7 @@ separate user that has full access only to that bucket is also a must. Easiest w
 all of this done is with help of [terraform](https://www.terraform.io/downloads.html):
 
 Most of the boiler plate has been taking care of by the reusable terraform module
-[ci-cache-s3](https://github.com/fpco/fpco-terraform-aws/tree/master/tf-modules/ci-cache-s3). Although
+[ci-cache-s3](https://github.com/fpco/terraform-aws-foundation/tree/master/modules/ci-cache-s3). Although
 not strictly required, I would recommend setting up a [keybase.io](https://keybase.io/) account,
 but having a regular PGP key will do just fine. All that is necessary is creating a `main.tf` file
 with this content:
@@ -94,7 +94,7 @@ terraform output secret_key | base64 --decode | keybase pgp decrypt
 ```
 
 You can inspect
-[ci-cache-s3/variables.tf](https://github.com/fpco/fpco-terraform-aws/tree/master/tf-modules/ci-cache-s3/variables.tf)
+[ci-cache-s3/variables.tf](https://github.com/fpco/terraform-aws-foundation/tree/master/modules/ci-cache-s3/variables.tf)
 file for a few extra variables that can be customized in the module.
 
 
