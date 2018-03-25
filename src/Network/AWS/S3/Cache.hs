@@ -10,8 +10,8 @@
 -- Stability   : experimental
 -- Portability : non-portable
 --
-module Network.AWS.S3.Cache (
-  runCacheS3
+module Network.AWS.S3.Cache
+  ( runCacheS3
   , cacheS3Version
   , L.LogLevel(..)
   , module Network.AWS.S3.Cache.Types
@@ -70,11 +70,6 @@ customLoggerT con minLevel (LoggingT f) = do
 
 
 
--- | Format `UTCTime` as a `String`.
-formatRFC822 :: UTCTime -> String
-formatRFC822 = formatTime defaultTimeLocale rfc822DateFormat
-
-
 -- | Run the cache action.
 run ::
      (MonadBaseControl IO m, MonadIO m)
@@ -94,7 +89,7 @@ saveCache isPublic hAlgTxt comp dirs conf = do
         T.intercalate ", " sup
   run
     (withHashAlgorithm_ hAlgTxt hashNoSupport $ \hAlg ->
-       getCacheHandle dirs hAlg comp >>= uploadCache isPublic)
+       getCacheHandle dirs hAlg comp >>= (void . runMaybeT . uploadCache isPublic))
     conf
 
 
@@ -108,7 +103,7 @@ mkConfig CommonArgs {..} = do
   let env = maybe envInit (\reg -> envInit & envRegion .~ reg) commonRegion
   mGitBranch <- maybe (liftIO $ getBranchName commonGitDir) (return . Just) commonGitBranch
   let objKey = mkObjectKey commonPrefix mGitBranch commonSuffix
-  return $ Config commonBucket objKey env commonVerbosity commonConcise
+  return $ Config commonBucket objKey env commonVerbosity commonConcise Nothing commonMaxBytes
 
 
 runCacheS3 :: CommonArgs -> Action -> IO ()
@@ -134,13 +129,20 @@ runCacheS3 ca@CommonArgs {..} action = do
         Save saveStackArgs {savePaths = savePaths saveStackArgs ++ stackLocalPaths}
     Restore (RestoreArgs {..}) -> do
       config <- mkConfig ca
-      restoreSuccessfull <- restoreCache config
+      restoreSuccessfull <- restoreCache (config & maxAge .~ restoreMaxAge)
       case (restoreSuccessfull, restoreBaseBranch) of
         (False, Just _) -> do
           let baseObjKey = mkObjectKey commonPrefix restoreBaseBranch commonSuffix
           void $
             restoreCache $
-            Config commonBucket baseObjKey (config ^. confEnv) commonVerbosity commonConcise
+            Config
+              commonBucket
+              baseObjKey
+              (config ^. confEnv)
+              commonVerbosity
+              commonConcise
+              restoreMaxAge
+              commonMaxBytes
         _ -> return ()
     RestoreStack (RestoreStackArgs {..}) -> do
       resolver <- getStackResolver restoreStackProject

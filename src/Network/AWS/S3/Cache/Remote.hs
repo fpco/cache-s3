@@ -15,6 +15,7 @@
 --
 module Network.AWS.S3.Cache.Remote where
 
+import           Control.Applicative
 import           Control.Exception.Safe
 import           Control.Lens
 import           Control.Monad.Logger                 as L
@@ -53,7 +54,8 @@ import           Network.HTTP.Types.Status            (Status (statusMessage),
 import           Prelude                              as P
 import           System.IO                            (Handle)
 
-
+-- | Will check if there is already cache up on AWS and checks if it's contents has changed.
+-- Returns create time date if new cache should be uploaded.
 hasCacheChanged ::
      ( MonadReader r m
      , MonadResource m
@@ -66,29 +68,37 @@ hasCacheChanged ::
      , Typeable h
      )
   => Digest h
-  -> m Bool
+  -> m (Maybe UTCTime)
 hasCacheChanged newHash = do
   c <- ask
   let getObjReq = getObject (c ^. bucketName) (c ^. objectKey)
       hashKey = getHashMetaKey newHash
       onErr status = do
         case () of
-          () | status == status404 -> do
+          ()
+            | status == status404 -> do
               logAWS LevelInfo "No previously stored cache was found."
-              return (Nothing, Nothing)
-          _ -> return (Just LevelError, Nothing)
+              return (Nothing, (Nothing, Nothing))
+          _ -> return (Just LevelError, (Nothing, Nothing))
       onSucc resp = do
         logAWS LevelDebug $ "Discovered previous cache."
         let mOldHash = HM.lookup hashKey (resp ^. gorsMetadata)
+            mCreateTime =
+               (HM.lookup metaCreateTimeKey (resp ^. gorsMetadata) >>= parseISO8601) <|>
+              (resp ^. gorsLastModified)
         case mOldHash of
           Just oldHash ->
             logAWS LevelDebug $ "Hash value for previous cache is " <> hashKey <> ": " <> oldHash
           Nothing -> do
             logAWS LevelWarn $ "Previous cache is missing a hash value '" <> hashKey <> "'"
-        return $ mOldHash
-  mOldHashTxt <- sendAWS getObjReq onErr onSucc
+        return $ (mOldHash, mCreateTime)
+  (mOldHashTxt, mCreateTime) <- sendAWS getObjReq onErr onSucc
+  createTime <- maybe (liftIO getCurrentTime) return mCreateTime
   mOldHash <- maybe (return Nothing) decodeHash mOldHashTxt
-  return (Just newHash /= mOldHash)
+  return
+    (if Just newHash /= mOldHash
+       then Just createTime
+       else Nothing)
 
 
 encodeHash :: HashAlgorithm h => Digest h -> Text
@@ -114,42 +124,47 @@ uploadCache ::
      , HasMinLogLevel r L.LogLevel
      , HasObjectKey r ObjectKey
      , HasBucketName r BucketName
+     , HasMaxSize r (Maybe Integer)
      , MonadResource m
      , MonadLoggerIO m
      , HashAlgorithm h
      , Typeable h
      )
   => Bool -> (Handle, Word64, Digest h, Compression)
-  -> m ()
+  -> MaybeT m ()
 uploadCache isPublic (hdl, cSize, newHash, comp) = do
   c <- ask
-  hasChanged <- hasCacheChanged newHash
-  if hasChanged
-    then do
-      let newHashTxt = encodeHash newHash
-          hashKey = getHashMetaKey newHash
-          cmu =
-            createMultipartUpload (c ^. bucketName) (c ^. objectKey) & cmuMetadata .~
-            HM.fromList
-              [ (hashAlgorithmMetaKey, hashKey)
-              , (hashKey, newHashTxt)
-              , (compressionMetaKey, getCompressionName comp)
-              ] & if isPublic then cmuACL .~ Just OPublicRead else id
-      logAWS LevelInfo $
-        "Data change detected, caching " <> formatBytes (fromIntegral cSize) <> " with " <> hashKey <>
-        ": " <>
-        newHashTxt
-      reporter <- getInfoLoggerIO
-      runLoggingAWS_ $
-        runConduit $
-        sourceHandle hdl .|
-        passthroughSink (streamUpload (Just (100 * 2 ^ (20 :: Int))) cmu) (void . pure) .|
-        getProgressReporter reporter cSize .|
-        sinkNull
-      logAWS LevelInfo $ "Finished uploading. Files are cached on S3."
-    else logAWS LevelInfo "No change to cache was detected."
-
-
+  when (maybe False (fromIntegral cSize >=) (c ^. maxSize)) $ do
+    logAWS LevelInfo $
+      "Refusing to save, cache is too big: " <> formatBytes (fromIntegral cSize)
+    MaybeT $ return Nothing
+  mCreatedTime <- hasCacheChanged newHash
+  createTime <- mCreatedTime `onNothing` logAWS LevelInfo "No change to cache was detected."
+  let newHashTxt = encodeHash newHash
+      hashKey = getHashMetaKey newHash
+      cmu =
+        createMultipartUpload (c ^. bucketName) (c ^. objectKey) & cmuMetadata .~
+        HM.fromList
+          [ (metaHashAlgorithmKey, hashKey)
+          , (metaCreateTimeKey, formatISO8601 createTime)
+          , (hashKey, newHashTxt)
+          , (compressionMetaKey, getCompressionName comp)
+          ] &
+        if isPublic
+          then cmuACL .~ Just OPublicRead
+          else id
+  logAWS LevelInfo $
+    "Data change detected, caching " <> formatBytes (fromIntegral cSize) <> " with " <> hashKey <>
+    ": " <>
+    newHashTxt
+  reporter <- getInfoLoggerIO
+  runLoggingAWS_ $
+    runConduit $
+    sourceHandle hdl .|
+    passthroughSink (streamUpload (Just (100 * 2 ^ (20 :: Int))) cmu) (void . pure) .|
+    getProgressReporter reporter cSize .|
+    sinkNull
+  logAWS LevelInfo $ "Finished uploading. Files are cached on S3."
 
 
 onNothing :: Monad m => Maybe b -> m a -> MaybeT m b
@@ -187,6 +202,8 @@ downloadCache ::
      , HasMinLogLevel c L.LogLevel
      , HasObjectKey c ObjectKey
      , HasBucketName c BucketName
+     , HasMaxAge c (Maybe NominalDiffTime)
+     , HasMaxSize c (Maybe Integer)
      )
   => (forall h. HashAlgorithm h =>
                   Compression -> h -> Sink S.ByteString (ResourceT IO) (Digest h))
@@ -196,7 +213,8 @@ downloadCache sink = do
   let getObjReq = getObject (c ^. bucketName) (c ^. objectKey)
       onErr status = do
         case () of
-          () | status == status404 -> do
+          ()
+            | status == status404 -> do
               logAWS LevelInfo "No previously stored cache was found."
               MaybeT $ return Nothing
           _ -> return (Just LevelError, ())
@@ -211,13 +229,37 @@ downloadCache sink = do
       (logAWS LevelWarn $ "Compression algorithm is not supported: " <> compAlgTxt)
     logAWS LevelDebug $ "Compression algorithm used: " <> compAlgTxt
     hashAlgName <-
-      HM.lookup hashAlgorithmMetaKey (resp ^. gorsMetadata) `onNothing`
+      HM.lookup metaHashAlgorithmKey (resp ^. gorsMetadata) `onNothing`
       logAWS LevelWarn "Missing information on hashing algorithm."
     logAWS LevelDebug $ "Hashing algorithm used: " <> hashAlgName
     hashTxt <-
       HM.lookup hashAlgName (resp ^. gorsMetadata) `onNothing`
       (logAWS LevelWarn $ "Cache is missing a hash value '" <> hashAlgName <> "'")
     logAWS LevelDebug $ "Hash value is " <> hashAlgName <> ": " <> hashTxt
+    let mCreateTime = do
+          createTimeTxt <- HM.lookup metaCreateTimeKey (resp ^. gorsMetadata)
+          parseISO8601 createTimeTxt
+    createTime <-
+      (mCreateTime <|> (resp ^. gorsLastModified)) `onNothing`
+      (logAWS LevelWarn $ "Cache is missing creation time info.")
+    logAWS LevelDebug $ "Cache creation timestamp:  " <> formatRFC822 createTime
+    case c ^. maxAge of
+      Nothing -> return ()
+      Just timeDelta -> do
+        curTime <- liftIO getCurrentTime
+        when (curTime >= addUTCTime timeDelta createTime) $ do
+          logAWS LevelInfo $
+            "Refusing to restore, cache is too old: " <>
+            formatDiffTime (diffUTCTime curTime createTime)
+          deleteCache
+          MaybeT $ return Nothing
+    case (,) <$> (resp ^. gorsContentLength) <*> (c ^. maxSize) of
+      Nothing -> return ()
+      Just (len, maxLen) ->
+        when (len >= maxLen) $ do
+          logAWS LevelInfo $ "Refusing to restore, cache is too big: " <> formatBytes len
+          deleteCache
+          MaybeT $ return Nothing
     let noHashAlgSupport _ = do
           logAWS LevelWarn $ "Hash algorithm used for the cache is not supported: " <> hashAlgName
     withHashAlgorithm_ hashAlgName noHashAlgSupport $ \hashAlg -> do
@@ -333,7 +375,7 @@ runLoggingAWS action onErr onSucc = do
       (mLevel, def) <- onErr status
       case mLevel of
         Just level -> logAWS level errMsg
-        Nothing -> return ()
+        Nothing    -> return ()
       return def
     Right suc -> onSucc suc
 
@@ -390,22 +432,3 @@ getProgressReporter reporterTxt totalSize = do
         return (acc', chunk)
   curTime <- liftIO getCurrentTime
   void $ CL.mapAccumM reportProgressAccum (thresh, 0, 0, curTime)
-
-
-formatBytes :: Integer -> Text
-formatBytes val =
-  fmt $ fromMaybe (P.last scaled) $ listToMaybe $ P.dropWhile ((>= 10240) . fst) $ scaled
-  where
-    fmt (sVal10, n) =
-      (\(d, m) -> T.pack (show d) <> "." <> T.pack (show m)) (sVal10 `divMod` 10) <> " " <> n
-    val10 = 10 * val
-    scale (s, r) =
-      s +
-      if r < 512
-        then 0
-        else 1
-    scaled =
-      P.map (\(t, abbr) -> (scale (val10 `divMod` t), abbr)) $
-      P.zip
-        [2 ^ (x * 10) | x <- [0 :: Int ..]]
-        ["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB"]

@@ -226,9 +226,42 @@ $ cache-s3 restore stack work
 
 ### Clearing
 
-If for some reason there is a need to remove cache for particular build, all is necessary is to run
-`cache-s3 clear`, `cache-s3 clear stack` or `cache-s3 clear stack work` with the same arguments that
-`cache restore` would be called with. Alternatively a file can be manually removed from an S3
+In certain setups that update same cache for extensive period of times can run into a problem of
+long save/restore times due to constantly increasing size of cache. There are two non-mutually
+exclusive possible solutions to this issue:
+
+* Clear out cache that is older that specified life span with `--max-age` arg:
+
+```bash
+$ cache-s3 -c -b ci-cache-bucket --prefix test restore --max-age="5m 30s"
+[Info ]: <cache-s3/test/master.cache> - Refusing to restore, cache is too old: 2 hours, 35 minutes, 21 seconds
+[Info ]: <cache-s3/test/master.cache> - Clear cache request was successfully submitted.
+$ cache-s3 -c -b ci-cache-bucket --prefix test restore --max-age="5m 30s"
+[Info ]: <cache-s3/test/master.cache> - No previously stored cache was found.
+```
+
+* Prevent large cache form being either saved or restored or both with `--max-size`. Clears out
+  cache too upon a failed restore attempt:
+
+```bash
+$ cache-s3 -c -b ci-cache-bucket --prefix test save -p src --max-size 10kb
+[Info ]: Caching: /home/lehins/fpco/cache-s3/src
+[Info ]: <cache-s3/test/master.cache> - Refusing to save, cache is too big: 13.6 KiB
+$ cache-s3 -c -b ci-cache-bucket --prefix test save -p src --max-size 1MiB
+[Info ]: Caching: /home/lehins/fpco/cache-s3/src
+[Info ]: <cache-s3/test/master.cache> - Data change detected, caching 13.6 KiB with sha256: X7Abafwff4DETyWrKP6x2RpWK6o0gh5xfpwOU4++m2A=
+[Info ]: Progress: 10%, speed: 57.2 KiB/s
+[Info ]: <cache-s3/test/master.cache> - Finished uploading. Files are cached on S3.
+$ cache-s3 -c -b ci-cache-bucket --prefix test restore --max-size 13KiB
+[Info ]: <cache-s3/test/master.cache> - Refusing to restore, cache is too big: 13.6 KiB
+[Info ]: <cache-s3/test/master.cache> - Clear cache request was successfully submitted.
+$ cache-s3 -c -b ci-cache-bucket --prefix test restore --max-size 13KiB
+[Info ]: <cache-s3/test/master.cache> - No previously stored cache was found.
+```
+
+If there is some other reason to remove cache for a particular build, all that is necessary is to
+run `cache-s3 clear`, `cache-s3 clear stack` or `cache-s3 clear stack work` with the same arguments
+that `cache restore` would be called with. Alternatively a file can be manually removed from an S3
 bucket. Despite that files on S3 have extension `.cache`, they are simple `.tar.gz` and can be
 manually inspected for content, if some CI build failure debugging is necessary.
 

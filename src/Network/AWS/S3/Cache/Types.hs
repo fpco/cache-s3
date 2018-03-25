@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP                    #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE LambdaCase             #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE OverloadedStrings      #-}
 {-# LANGUAGE RankNTypes             #-}
@@ -16,22 +17,29 @@
 --
 module Network.AWS.S3.Cache.Types where
 
+import           Control.Applicative
 import           Control.Lens
-import           Control.Monad.Logger         as L
-import           Control.Monad.Trans.Resource (MonadResource)
+import           Control.Monad.Logger             as L
+import           Control.Monad.Trans.Resource     (MonadResource)
 import           Crypto.Hash
-import           Data.ByteString              (ByteString)
-import           Data.Conduit                 (Conduit)
+import           Data.Attoparsec.ByteString.Char8
+import           Data.ByteString                  (ByteString)
+import           Data.ByteString.Char8            as S8
+import           Data.Char                        as C (toLower)
+import           Data.Conduit                     (Conduit)
 import           Data.Conduit.Zlib
-import           Data.Maybe                   (fromMaybe)
-import           Data.Monoid                  ((<>))
-import           Data.Text                    as T
+import           Data.Maybe                       (fromMaybe, listToMaybe)
+import           Data.Monoid                      ((<>))
+import           Data.Text                        as T
+import           Data.Text.Encoding               as T
+import           Data.Time
 import           Data.Typeable
 import           Network.AWS.Env
 import           Network.AWS.S3.Types
+import           Prelude                          as P
 
 #if !WINDOWS
-import qualified Data.Conduit.LZ4             as LZ4
+import qualified Data.Conduit.LZ4                 as LZ4
 #endif
 
 data Config = Config
@@ -40,6 +48,8 @@ data Config = Config
   , _confEnv     :: !Env
   , _minLogLevel :: !L.LogLevel
   , _isConcise   :: !Bool
+  , _maxAge      :: !(Maybe NominalDiffTime)
+  , _maxSize     :: !(Maybe Integer)
   }
 
 makeLensesWith classUnderscoreNoPrefixFields ''Config
@@ -69,6 +79,7 @@ data CommonArgs = CommonArgs
   , commonSuffix    :: !(Maybe Text)
   , commonVerbosity :: !L.LogLevel
   , commonConcise   :: !Bool
+  , commonMaxBytes  :: !(Maybe Integer)
   } deriving (Show)
 
 
@@ -93,6 +104,7 @@ data SaveStackWorkArgs = SaveStackWorkArgs
 
 data RestoreArgs = RestoreArgs
   { restoreBaseBranch :: !(Maybe Text)
+  , restoreMaxAge     :: !(Maybe NominalDiffTime)
   } deriving (Show)
 
 
@@ -123,18 +135,132 @@ data Action
   | ClearStackWork !StackProject
   deriving (Show)
 
+----------------
+--- Time -------
+----------------
 
+
+data Interval
+  = Years Integer
+  | Days Integer
+  | Hours Integer
+  | Minutes Integer
+  | Seconds Integer
+  deriving (Show)
+
+formatDiffTime :: NominalDiffTime -> Text
+formatDiffTime nd = go "" $ fmap Seconds $ divMod (round nd) 60
+  where
+    go acc =
+      \case
+        (_, Years y)
+          | y > 0 -> showTime y "year" ", " acc
+        (n, Days d)
+          | d > 0 || n > 0 -> go (showTime d "day" ", " acc) $ (0, Years n)
+        (n, Hours h)
+          | h > 0 || n > 0 -> go (showTime h "hour" ", " acc) $ fmap Days $ divMod n 365
+        (n, Minutes m)
+          | m > 0 || n > 0 -> go (showTime m "minute" ", " acc) $ fmap Hours $ divMod n 24
+        (n, Seconds s) -> go (showTime s "second" "" acc) $ fmap Minutes $ divMod n 60
+        _ -> acc
+    showTime 0 _    _   acc = acc
+    showTime t tTxt sep acc =
+      T.pack (show t) <> " " <> tTxt <>
+      (if t == 1
+         then ""
+         else "s") <>
+      (if T.null acc
+         then acc
+         else sep <> acc)
+
+parseDiffTime :: Text -> Maybe NominalDiffTime
+parseDiffTime =
+  either (const Nothing) (Just . fromInteger . sum . P.map toSec) .
+  parseOnly (intervalParser <* skipSpace <* endOfInput) . T.encodeUtf8 . T.toLower
+  where
+    toSec =
+      \case
+        Years y -> y * 365 * 24 * 3600
+        Days d -> d * 24 * 3600
+        Hours h -> h * 3600
+        Minutes m -> m * 60
+        Seconds s -> s
+    maybePlural = (char 's' *> pure ()) <|> pure ()
+    intervalParser =
+      many1 $
+      skipSpace *>
+      choice
+        [ Years <$> decimal <* skipSpace <* ("year" <* maybePlural <|> "y")
+        , Days <$> decimal <* skipSpace <* ("day" <* maybePlural <|> "d")
+        , Hours <$> decimal <* skipSpace <* ("hour" <* maybePlural <|> "h")
+        , Minutes <$> decimal <* skipSpace <* ("minute" <* maybePlural <|> "min" <|> "m")
+        , Seconds <$> decimal <* skipSpace <* ("second" <* maybePlural <|> "sec" <|> "s")
+        ]
+
+formatRFC822 :: UTCTime -> Text
+formatRFC822 = T.pack . formatTime defaultTimeLocale rfc822DateFormat
+
+parseISO8601 :: Text -> Maybe UTCTime
+parseISO8601 = parseTimeM False defaultTimeLocale iso8601 . T.unpack
+
+formatISO8601 :: UTCTime -> Text
+formatISO8601 = T.pack . formatTime defaultTimeLocale iso8601
+
+iso8601 :: String
+iso8601 = iso8601DateFormat (Just "%H:%M:%S%Q%z")
+
+
+parseBytes :: Text -> Maybe Integer
+parseBytes =
+  either (const Nothing) Just .
+  parseOnly ((*) <$> decimal <*> multiplier) . T.encodeUtf8 . T.toLower
+  where
+    (mults, abbrs) = P.unzip bytesMult
+    abbrsParser =
+      P.zipWith
+        (<|>)
+        (P.map (string . S8.pack . P.map C.toLower) abbrs)
+        ["", "kb", "mb", "gb", "tb", "pb", "eb", "zb", "yb"]
+    multiplier = skipSpace *> choice [p *> pure f | (p, f) <- P.reverse $ P.zip abbrsParser mults]
+
+
+formatBytes :: Integer -> Text
+formatBytes val =
+  fmt $ fromMaybe (P.last scaled) $ listToMaybe $ P.dropWhile ((>= 10240) . fst) $ scaled
+  where
+    fmt (sVal10, n) =
+      (\(d, m) -> T.pack (show d) <> "." <> T.pack (show m)) (sVal10 `divMod` 10) <> " " <> n
+    val10 = 10 * val
+    scale (s, r) =
+      s +
+      if r < 512
+        then 0
+        else 1
+    scaled = [(scale (val10 `divMod` t), T.pack abbr) | (t, abbr) <- bytesMult]
+
+bytesMult :: [(Integer, String)]
+bytesMult =
+  P.zip
+    [2 ^ (x * 10) | x <- [0 :: Int ..]]
+    ["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB"]
+
+
+----------------
+--- Matadata ---
+----------------
+
+metaCreateTimeKey :: Text
+metaCreateTimeKey = "created"
+
+metaHashAlgorithmKey :: Text
+metaHashAlgorithmKey = "hash"
+
+getHashMetaKey :: Typeable h => proxy h -> Text
+getHashMetaKey hashProxy = T.toLower (T.pack (showsTypeRep (typeRep hashProxy) ""))
 
 ---------------
 --- Hashing ---
 ---------------
-
-
-hashAlgorithmMetaKey :: Text
-hashAlgorithmMetaKey = "hash"
-
-getHashMetaKey :: Typeable h => proxy h -> Text
-getHashMetaKey hashProxy = T.toLower (T.pack (showsTypeRep (typeRep hashProxy) ""))
 
 -- | Same as `withHashAlgorithm`, but accepts an extra function to be invoked when unsupported hash
 -- algorithm name is supplied that also returns a default value.

@@ -20,9 +20,9 @@ import           System.IO            (BufferMode (LineBuffering),
                                        hSetBuffering, stdout)
 import           Text.Read            (readMaybe)
 
-readerMaybe :: ReadM a -> ReadM (Maybe a)
-readerMaybe reader = (Just <$> reader) <|> pure Nothing
 
+readWithMaybe :: (Text -> Maybe a) -> ReadM (Maybe a)
+readWithMaybe f = Just <$> maybeReader (f . T.pack)
 
 maybeAuto :: Read a => ReadM (Maybe a)
 maybeAuto =
@@ -39,7 +39,6 @@ readLogLevel =
     "warn"  -> Just LevelWarn
     "error" -> Just LevelError
     _       -> Nothing
-
 
 data Args = Args CommonArgs Action deriving Show
 
@@ -64,91 +63,104 @@ commonArgsParser version mS3Bucket =
        help
          "Name of the S3 bucket that will be used for caching of local files. \
             \If S3_BUCKET environment variable is not set, this argument is required."))) <*>
-  (option
-     (readerMaybe readRegion)
+  option
+     (Just <$> readRegion)
      (long "region" <> short 'r' <> value Nothing <> metavar "AWS_REGION" <>
       help
         "Region where S3 bucket is located. \
         \By default 'us-east-1' will be used unless AWS_REGION environment variable \
-        \is set or defualt region is specified in ~/.aws/config")) <*>
-  (option
-     (readerMaybe readText)
+        \is set or defualt region is specified in ~/.aws/config") <*>
+  option
+     (Just <$> readText)
      (long "prefix" <> value Nothing <>
       help
         "Arbitrary prefix that will be used for storing objects, usually the project \
-        \name that this tool is being used for.")) <*>
-  (option
-     (readerMaybe str)
+        \name that this tool is being used for.") <*>
+  option
+     (Just <$> str)
      (long "git-dir" <> value Nothing <> metavar "GIT_DIR" <>
       help
         "Path to .git repository. Default is either extracted from GIT_DIR environment \
         \variable or current path is traversed upwards in search for one. This argument \
         \is only used for inferring --git-branch, thus it is ignored whenever a custom \
-        \value for above argument is specified.")) <*>
-  (option
-     (readerMaybe readText)
+        \value for above argument is specified.") <*>
+  option
+     (Just <$> readText)
      (long "git-branch" <> value Nothing <> metavar "GIT_BRANCH" <>
       help
         "Current git branch. By default will use the branch the HEAD of repository is \
         \pointing to, unless GIT_BRANCH environment variables is set. This argument is \
-        \used for proper namespacing on S3.")) <*>
-  (option
-     (readerMaybe readText)
+        \used for proper namespacing on S3.") <*>
+  option
+     (Just <$> readText)
      (long "suffix" <> value Nothing <>
       help
         "Arbitrary suffix that will be used for storing objects in the S3 bucket. \
         \This argument should be used to store multiple cache objects within the \
-        \same CI build.")) <*>
-  (option
-     readLogLevel
-     (long "verbosity" <> short 'v' <> value LevelInfo <>
-      help "Verbosity level (debug|info|warn|error). Default level is 'info'. \
+        \same CI build.") <*>
+  option
+    readLogLevel
+    (long "verbosity" <> short 'v' <> value LevelInfo <>
+     help
+       "Verbosity level (debug|info|warn|error). Default level is 'info'. \
            \IMPORTANT: Level 'debug' can leak sensitive request information, thus \
-           \should NOT be used in production.")) <*>
-  (switch
-     (long "concise" <> short 'c' <>
-      help "Shorten the output by removing timestamp and name of the tool.")) <*
-  (infoOption
-     ("cache-s3-" <> showVersion version)
-     (long "version" <> help "Print current verison of the program."))
+           \should NOT be used in production.") <*>
+  switch
+    (long "concise" <> short 'c' <>
+     help "Shorten the output by removing timestamp and name of the tool.") <*>
+  option
+    (readWithMaybe parseBytes)
+    (long "max-size" <> value Nothing <>
+     help "Maximum size of cache that will be acceptable for uploading/downloading to/from S3") <*
+  infoOption
+    ("cache-s3-" <> showVersion version)
+    (long "version" <> help "Print current verison of the program.")
 
 
 saveArgsParser :: (Parser FilePath -> Parser [FilePath]) -> Parser SaveArgs
 saveArgsParser paths =
   SaveArgs <$>
   paths (option str (long "path" <> short 'p' <> help "All the paths that should be chached")) <*>
-  (option
-     readText
-     (long "hash" <> value "sha256" <>
-      help "Hashing algorithm to use for cache validation")) <*>
+  option
+    readText
+    (long "hash" <> value "sha256" <> help "Hashing algorithm to use for cache validation") <*>
   option
     (maybeReader (readCompression . T.pack))
     (long "compression" <> value GZip <>
      help
        ("Compression algorithm to use for cache. Default 'gzip'. Supported: " <>
         T.unpack supportedCompression)) <*>
-  (switch
-     (long "public" <>
-      help "Make cache publicly readable. IMPORTANT: Make sure you know what you are \
-           \doing when using this flag as it will lead to cache be readable by \
-           \anonymous users, which will in turn also result in charges by AWS."))
+  switch
+    (long "public" <>
+     help
+       "Make cache publicly readable. IMPORTANT: Make sure you know what you are \
+       \doing when using this flag as it will lead to cache be readable by \
+       \anonymous users, which will in turn also result in charges by AWS.")
 
 
 restoreArgsParser :: Parser RestoreArgs
 restoreArgsParser =
   RestoreArgs <$>
   option
-    (readerMaybe readText)
+    (Just <$> readText)
     (long "base-branch" <> value Nothing <>
      help "Base git branch. This branch will be used as a readonly fallback upon a \
           \cache miss, eg. whenever it is a first build for a new branch, it is possible \
-          \to use cache from 'master' branch by setting --base-branch=master")
+          \to use cache from 'master' branch by setting --base-branch=master") <*>
+  option
+     (readWithMaybe parseDiffTime)
+     (long "max-age" <> value Nothing <>
+      help
+        "Amount of time cache will be valid for from the moment it was initially uploaded to S3, \
+        \i.e. updating cache doesn't reset the time counter. Accepts common variations of \
+        \(year|day|hour|min|sec), \
+        \, eg. --max-age='30 days 1 hour' or --max-age='1h 45m'")
 
 
 stackRootArg :: Parser (Maybe FilePath)
 stackRootArg =
   option
-    (readerMaybe str)
+    (Just <$> str)
     (long "stack-root" <> value Nothing <> metavar "STACK_ROOT" <>
      help "Global stack directory. Default is taken from stack, i.e a value of \
           \STACK_ROOT environment variable or a system dependent path: eg. \
@@ -159,13 +171,13 @@ stackProjectParser :: Parser StackProject
 stackProjectParser =
   StackProject <$>
   option
-    (readerMaybe str)
+    (Just <$> str)
     (long "stack-yaml" <> value Nothing <> metavar "STACK_YAML" <>
      help
        "Path to stack configuration file. Default is taken from stack: i.e. \
        \STACK_YAML environment variable or ./stack.yaml") <*>
   option
-    (readerMaybe readText)
+    (Just <$> readText)
     (long "resolver" <> value Nothing <>
      help
        ("Use a separate namespace for each stack resolver.  Default value is \
@@ -184,7 +196,7 @@ saveStackWorkArgsParser =
   info
     (SaveStackWorkArgs <$> saveStackArgsParser <*>
      (option
-        (readerMaybe str)
+        (Just <$> str)
         (long "work-dir" <> value Nothing <> metavar "STACK_WORK" <>
          help
            "Relative stack work directory. Default is taken from stack, i.e. \
