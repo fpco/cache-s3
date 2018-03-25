@@ -1,3 +1,7 @@
+# v0.1.4
+
+* Addition of `--max-size` and `--max-age` arguments.
+
 # v0.1.3
 
 * Fixes caching of files with international names. Proper unicode handling.
