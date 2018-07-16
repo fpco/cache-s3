@@ -49,7 +49,7 @@ after_test:
 # Upload an executable to the release for every git tag
 - ps: >-
     if ($env:APPVEYOR_REPO_TAG_NAME) {
-      Start-FileDownload https://github.com/tfausak/github-release/releases/download/$env:GITHUB_RELEASE_VERSION/github-release-$env:GITHUB_RELEASE_VERSION-windows.zip -FileName github-release.zip
+      Start-FileDownload https://github.com/tfausak/github-release/releases/download/$env:GITHUB_RELEASE_VERSION/github-release-windows.zip -FileName github-release.zip
       7z x github-release.zip github-release.exe
       cp $env:APPDATA\local\bin\cache-s3.exe cache-s3.exe
       7z a cache-s3.zip cache-s3.exe
