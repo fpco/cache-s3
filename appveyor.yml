@@ -35,7 +35,7 @@ before_test:
 test_script:
 - cd "%WORK_DIR%"
 - stack setup --no-reinstall > nul
-- stack install -j 2 --no-terminal
+- stack install -j 2 --no-terminal --test
 
 
 after_test:

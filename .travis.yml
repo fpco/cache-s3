@@ -56,19 +56,10 @@ script:
   set -ex
   if [ "$TRAVIS_OS_NAME" = "linux" ]; then
     TIMEOUT="timeout"
-    # Workaroud for linker issue.
-    # See: https://www.fpcomplete.com/blog/2016/10/static-compilation-with-stack#crtbegint-swap
-    # cd /usr/lib/gcc/x86_64-linux-gnu/4.8/
-    # sudo rm crtbeginT.o
-    # sudo cp crtbeginS.o crtbeginT.o
-    # cd $TRAVIS_BUILD_DIR
-    # (timeout 1800 stack --no-terminal install) || ([ $? = 124 ] && echo "Timed out after 30min so the build will have to be picked up next time")
   else
     TIMEOUT="gtimeout"
-    # (gtimeout 1800 stack --no-terminal install) || ([ $? = 124 ] && echo "Timed out after 30min so the build will have to be picked up next time")
   fi
-    ($TIMEOUT 1800 stack --no-terminal install) || ([ $? = 124 ] && echo "Timed out after 30min so the build will have to be picked up next time")
-  #stack --no-terminal install
+    ($TIMEOUT 1800 (stack install --no-terminal --test) || ([ $? = 124 ] && echo "Timed out after 30min so the build will have to be picked up next time")
   set +ex
 
 after_success:
