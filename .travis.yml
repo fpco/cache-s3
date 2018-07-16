@@ -59,7 +59,7 @@ script:
   else
     TIMEOUT="gtimeout"
   fi
-    ($TIMEOUT 1800 (stack install --no-terminal --test) || ([ $? = 124 ] && echo "Timed out after 30min so the build will have to be picked up next time")
+    ("$TIMEOUT" 1800 stack install --no-terminal --test || ([ $? = 124 ] && echo "Timed out after 30min so the build will have to be picked up next time")
   set +ex
 
 after_success:

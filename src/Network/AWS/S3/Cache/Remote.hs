@@ -270,7 +270,8 @@ downloadCache sink = do
       len <-
         (resp ^. gorsContentLength) `onNothing`
         logAWS LevelError "Did not receive expected cache size form AWS"
-      logAWS LevelInfo $ "Restoring cache with total size: " <> formatBytes len
+      logAWS LevelInfo $ "Restoring cache from " <> formatRFC822 createTime <>
+        " with total size: " <> formatBytes len
       reporter <- getInfoLoggerIO
       hashComputed <-
         liftIO $
