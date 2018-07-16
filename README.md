@@ -119,7 +119,7 @@ Here are some examples on how to get `cache-s3` into your CI environment:
 
 ```
 CACHE_S3_VERSION="v0.1.1"
-OS_NAME=linux # can be set be CI, eg `TRAVIS_OS_NAME`
+OS_NAME=linux # can be set by CI, eg `TRAVIS_OS_NAME`
 curl -f -L https://github.com/fpco/cache-s3/releases/download/$CACHE_S3_VERSION/cache-s3-$CACHE_S3_VERSION-$OS_NAME-x86_64.tar.gz | tar xz -C ~/.local/bin 'cache-s3'
 ```
 

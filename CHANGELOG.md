@@ -1,3 +1,7 @@
+# v0.1.5
+
+* Fixes [#9](https://github.com/fpco/cache-s3/issues/9)
+
 # v0.1.4
 
 * Addition of `--max-size` and `--max-age` arguments.
