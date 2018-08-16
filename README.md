@@ -128,8 +128,9 @@ curl -f -L https://github.com/fpco/cache-s3/releases/download/$CACHE_S3_VERSION/
 ```
 $env:CACHE_S3_VERSION="v0.1.1"
 $env:OS_NAME="windows"
-Start-FileDownload https://github.com/fpco/cache-s3/releases/download/$env:CACHE_S3_VERSION/cache-s3-$env:CACHE_S3_VERSION-windows-x86_64.zip -FileName cache-s3.zip
-7z x cache-s3.zip cache-s3.exe
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+Invoke-WebRequest https://github.com/fpco/cache-s3/releases/download/$env:CACHE_S3_VERSION/cache-s3-$env:CACHE_S3_VERSION-windows-x86_64.zip -OutFile cache-s3.zip
+Expand-Archive cache-s3.zip -Destination .
 ```
 
 ### CI Setup
