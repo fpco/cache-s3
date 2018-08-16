@@ -270,8 +270,9 @@ downloadCache sink = do
       len <-
         (resp ^. gorsContentLength) `onNothing`
         logAWS LevelError "Did not receive expected cache size form AWS"
-      logAWS LevelInfo $ "Restoring cache from " <> formatRFC822 createTime <>
-        " with total size: " <> formatBytes len
+      logAWS LevelInfo $
+        "Restoring cache from " <> formatRFC822 createTime <> " with total size: " <>
+        formatBytes len
       reporter <- getInfoLoggerIO
       hashComputed <-
         liftIO $
@@ -280,7 +281,8 @@ downloadCache sink = do
         (getProgressReporter reporter (fromInteger len) .| sink compAlg hashAlg)
       if (hashComputed == hashExpected)
         then do
-          logAWS LevelInfo "Successfully restored previous cache"
+          logAWS LevelInfo $
+            "Successfully restored previous cache with hash: " <> encodeHash hashComputed
         else do
           logAWS LevelError $
             "Computed '" <> hashAlgName <> "' hash mismatch: '" <> encodeHash hashComputed <>

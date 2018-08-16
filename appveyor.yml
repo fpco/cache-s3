@@ -25,8 +25,9 @@ before_test:
 
 - ps: >-
     if (-not ("$env:CACHE_S3_VERSION" -eq "" )) {
-      Start-FileDownload https://github.com/fpco/cache-s3/releases/download/$env:CACHE_S3_VERSION/cache-s3-$env:CACHE_S3_VERSION-windows-x86_64.zip -FileName cache-s3.zip
-      7z x cache-s3.zip cache-s3.exe
+      [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+      Invoke-WebRequest https://github.com/fpco/cache-s3/releases/download/$env:CACHE_S3_VERSION/cache-s3-$env:CACHE_S3_VERSION-windows-x86_64.zip -OutFile cache-s3.zip
+      Expand-Archive cache-s3.zip -Destination .
       .\cache-s3 --prefix=$env:APPVEYOR_REPO_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows restore stack --base-branch=master
       .\cache-s3 --prefix=$env:APPVEYOR_REPO_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows restore stack work --base-branch=master
     }
