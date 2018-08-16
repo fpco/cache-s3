@@ -118,7 +118,7 @@ Here are some examples on how to get `cache-s3` into your CI environment:
 * Linux and Mac
 
 ```
-CACHE_S3_VERSION="v0.1.1"
+CACHE_S3_VERSION="v0.1.5"
 OS_NAME=linux # can be set by CI, eg `TRAVIS_OS_NAME`
 curl -f -L https://github.com/fpco/cache-s3/releases/download/$CACHE_S3_VERSION/cache-s3-$CACHE_S3_VERSION-$OS_NAME-x86_64.tar.gz | tar xz -C ~/.local/bin 'cache-s3'
 ```
@@ -126,7 +126,7 @@ curl -f -L https://github.com/fpco/cache-s3/releases/download/$CACHE_S3_VERSION/
 * On Windows in PowerShell
 
 ```
-$env:CACHE_S3_VERSION="v0.1.1"
+$env:CACHE_S3_VERSION="v0.1.5"
 $env:OS_NAME="windows"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 Invoke-WebRequest https://github.com/fpco/cache-s3/releases/download/$env:CACHE_S3_VERSION/cache-s3-$env:CACHE_S3_VERSION-windows-x86_64.zip -OutFile cache-s3.zip
