@@ -81,15 +81,15 @@ run action conf =
   customLoggerT (conf ^. isConcise) (conf ^. minLogLevel) $ runReaderT action conf
 
 
-saveCache :: Bool -> Text -> Compression -> [FilePath] -> Config -> IO ()
-saveCache isPublic hAlgTxt comp dirs conf = do
+saveCache :: Bool -> Text -> Compression -> [FilePath] -> [FilePath] -> Config -> IO ()
+saveCache isPublic hAlgTxt comp dirs relativeDirs conf = do
   let hashNoSupport sup =
         logErrorN $
         "Hash algorithm '" <> hAlgTxt <> "' is not supported, use one of these instead: " <>
         T.intercalate ", " sup
   run
     (withHashAlgorithm_ hAlgTxt hashNoSupport $ \hAlg ->
-       getCacheHandle dirs hAlg comp >>= (void . runMaybeT . uploadCache isPublic))
+       getCacheHandle dirs relativeDirs hAlg comp >>= (void . runMaybeT . uploadCache isPublic))
     conf
 
 
@@ -114,7 +114,7 @@ runCacheS3 ca@CommonArgs {..} action = do
   case action of
     Save (SaveArgs {..}) -> do
       config <- mkConfig ca
-      saveCache savePublic saveHash saveCompression savePaths config
+      saveCache savePublic saveHash saveCompression savePaths saveRelativePaths config
     SaveStack (SaveStackArgs {..}) -> do
       stackGlobalPaths <- getStackGlobalPaths saveStackRoot
       resolver <- getStackResolver saveStackProject
