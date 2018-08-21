@@ -41,11 +41,11 @@ import           System.IO                    hiding (openTempFile)
 import           System.IO.Temp
 
 tarFiles :: (MonadCatch m, MonadResource m, MonadLogger m) =>
-            [FilePath] -> ConduitM a ByteString m ()
-tarFiles dirs = do
+            [FilePath] -> [FilePath] -> ConduitM a ByteString m ()
+tarFiles dirs relativeDirs = do
   logDebugN "Preparing files for saving in the cache."
   dirsCanonical <- liftIO $ P.mapM canonicalizePath dirs
-  uniqueDirs <- Maybe.catMaybes <$> P.mapM skipMissing (removeSubpaths dirsCanonical)
+  uniqueDirs <- Maybe.catMaybes <$> P.mapM skipMissing ((removeSubpaths dirsCanonical) ++ relativeDirs)
   if P.null uniqueDirs
     then logErrorN "No paths to cache has been specified."
     else sourceList uniqueDirs .| filePathConduit .| void tar
@@ -96,10 +96,11 @@ prepareCache compression = do
 getCacheHandle ::
      (HashAlgorithm h, MonadCatch m, MonadResource m, MonadLogger m)
   => [FilePath]
+  -> [FilePath]
   -> h
   -> Compression
   -> m (Handle, Word64, Digest h, Compression)
-getCacheHandle dirs _ comp = runConduit $ tarFiles dirs .| prepareCache comp
+getCacheHandle dirs relativeDirs _ comp = runConduit $ tarFiles dirs relativeDirs .| prepareCache comp
 
 
 -- | Restores all of the files from the tarball and computes the hash at the same time.
