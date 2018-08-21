@@ -1,7 +1,6 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 -- |
 -- Module      : Network.AWS.S3.Cache.Local
@@ -22,7 +21,6 @@ import           Control.Monad.Trans.Resource (MonadResource, ResourceT)
 import           Crypto.Hash                  (Digest, HashAlgorithm)
 import           Crypto.Hash.Conduit
 import           Data.ByteString              as S
-import           Data.ByteString.Char8        as S8
 import           Data.Conduit
 import           Data.Conduit.Binary
 import           Data.Conduit.List            as C
@@ -45,7 +43,7 @@ tarFiles :: (MonadCatch m, MonadResource m, MonadLogger m) =>
 tarFiles dirs relativeDirs = do
   logDebugN "Preparing files for saving in the cache."
   dirsCanonical <- liftIO $ P.mapM canonicalizePath dirs
-  uniqueDirs <- Maybe.catMaybes <$> P.mapM skipMissing ((removeSubpaths dirsCanonical) ++ relativeDirs)
+  uniqueDirs <- Maybe.catMaybes <$> P.mapM skipMissing (removeSubpaths dirsCanonical ++ relativeDirs)
   if P.null uniqueDirs
     then logErrorN "No paths to cache has been specified."
     else sourceList uniqueDirs .| filePathConduit .| void tar
@@ -115,6 +113,7 @@ restoreFilesFromCache comp _ =
   where
     restoreFile' fi = do
       case fileType fi of
-        FTDirectory -> liftIO $ createDirectoryIfMissing True (S8.unpack (filePath fi))
+        FTDirectory -- Make sure nested folders:
+         -> liftIO $ createDirectoryIfMissing True (decodeFilePath (filePath fi))
         _ -> return ()
       restoreFile fi

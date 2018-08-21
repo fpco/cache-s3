@@ -120,10 +120,10 @@ commonArgsParser version mS3Bucket =
 saveArgsParser :: (Parser FilePath -> Parser [FilePath]) -> Parser SaveArgs
 saveArgsParser paths =
   SaveArgs <$>
-  paths (option str (long "path" <> short 'p' <> help "All the paths that should be chached")) <*>
+  paths (option str (long "path" <> short 'p' <> help "All the paths that should be cached")) <*>
   paths (option str (long "relative-path" <>
                      short 'l' <>
-                     help "All the relative paths that should be chached")) <*>
+                     help "All the relative paths that should be cached")) <*>
   option
     readText
     (long "hash" <> value "sha256" <> help "Hashing algorithm to use for cache validation") <*>

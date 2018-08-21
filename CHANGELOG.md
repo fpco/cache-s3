@@ -1,3 +1,7 @@
+# v0.1.6
+
+* Addition ability to store relative paths with `--relative-path` argument: [#11](https://github.com/fpco/cache-s3/issues/11)
+
 # v0.1.5
 
 * Fixes [#9](https://github.com/fpco/cache-s3/issues/9)
