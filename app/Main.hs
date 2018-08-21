@@ -217,7 +217,7 @@ actionParser =
   (subparser $
    command "save" $
    info
-     (Save <$> saveArgsParser some <* helpOption <|> saveStackCommandParser)
+     (Save <$> saveArgsParser many <* helpOption <|> saveStackCommandParser)
      (progDesc "Command for caching the data in the S3 bucket." <> fullDesc)) <|>
   (subparser $
    command "restore" $
