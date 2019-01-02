@@ -35,6 +35,7 @@ import           Network.AWS.S3.Cache.Local
 import           Network.AWS.S3.Cache.Remote
 import           Network.AWS.S3.Cache.Stack
 import           Network.AWS.S3.Cache.Types
+import           Network.AWS.S3               (s3)
 import qualified Paths_cache_s3               as Paths
 import           Prelude                      as P
 import           System.Exit
@@ -99,7 +100,7 @@ restoreCache = run (maybe False (const True) <$> runMaybeT (downloadCache restor
 mkConfig :: (MonadIO m, MonadCatch m) =>
             CommonArgs -> m Config
 mkConfig CommonArgs {..} = do
-  envInit <- newEnv Discover
+  envInit <- newEnv Discover <&> configure (setEndpoint False "localhost" 9000 s3)
   let env = maybe envInit (\reg -> envInit & envRegion .~ reg) commonRegion
   mGitBranch <- maybe (liftIO $ getBranchName commonGitDir) (return . Just) commonGitBranch
   let objKey = mkObjectKey commonPrefix mGitBranch commonSuffix
