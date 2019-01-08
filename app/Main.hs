@@ -120,16 +120,22 @@ commonArgsParser version mS3Bucket =
 saveArgsParser :: (Parser FilePath -> Parser [FilePath]) -> Parser SaveArgs
 saveArgsParser paths =
   SaveArgs <$>
-  paths (option str (long "path" <> short 'p' <> help "All the paths that should be cached")) <*>
-  paths (option str (long "relative-path" <>
-                     short 'l' <>
-                     help "All the relative paths that should be cached")) <*>
+  paths
+    (option
+       str
+       (long "path" <> metavar "PATH" <> short 'p' <> help "All the paths that should be cached")) <*>
+  paths
+    (option
+       str
+       (long "relative-path" <> metavar "PATH" <> short 'l' <>
+        help "All the relative paths that should be cached")) <*>
   option
     readText
-    (long "hash" <> value "sha256" <> help "Hashing algorithm to use for cache validation") <*>
+    (long "hash" <> metavar "ALGORITHM" <> value "sha256" <>
+     help "Hashing algorithm to use for cache validation (default is 'sha256')") <*>
   option
     (maybeReader (readCompression . T.pack))
-    (long "compression" <> value GZip <>
+    (long "compression" <> metavar "ALGORITHM" <> value GZip <>
      help
        ("Compression algorithm to use for cache. Default 'gzip'. Supported: " <>
         T.unpack supportedCompression)) <*>
@@ -181,9 +187,9 @@ stackProjectParser =
        \STACK_YAML environment variable or ./stack.yaml") <*>
   option
     (Just <$> readText)
-    (long "resolver" <> value Nothing <>
+    (long "resolver" <> value Nothing <> metavar "RESOLVER" <>
      help
-       ("Use a separate namespace for each stack resolver.  Default value is \
+       ("Use a separate namespace for each stack resolver. Default value is \
         \inferred from stack.yaml"))
 
 
@@ -195,35 +201,38 @@ saveStackArgsParser =
 saveStackWorkArgsParser :: Parser SaveStackWorkArgs
 saveStackWorkArgsParser =
   subparser $
-  command "work" $
-  info
-    (SaveStackWorkArgs <$> saveStackArgsParser <*>
-     (option
-        (Just <$> str)
-        (long "work-dir" <> value Nothing <> metavar "STACK_WORK" <>
-         help
-           "Relative stack work directory. Default is taken from stack, i.e. \
+  metavar "work" <>
+  (command "work" $
+   info
+     (SaveStackWorkArgs <$> saveStackArgsParser <*>
+      (option
+         (Just <$> str)
+         (long "work-dir" <> value Nothing <> metavar "STACK_WORK" <>
+          help
+            "Relative stack work directory. Default is taken from stack, i.e. \
            \STACK_WORK environment variable or ./.stack-work/")) <*
-     helpOption)
-    (progDesc
-       "Command for caching content of .stack-work directory in the S3 bucket. \
+      helpOption)
+     (progDesc
+        "Command for caching content of .stack-work directory in the S3 bucket. \
        \For projects with many packages, all of the .stack-work directories will \
        \be saved." <>
-     fullDesc)
+      fullDesc))
 
 
 actionParser :: Parser Action
 actionParser =
   (subparser $
-   command "save" $
-   info
-     (Save <$> saveArgsParser many <* helpOption <|> saveStackCommandParser)
-     (progDesc "Command for caching the data in the S3 bucket." <> fullDesc)) <|>
+   metavar "save" <>
+   (command "save" $
+    info
+      (Save <$> saveArgsParser many <* helpOption <|> saveStackCommandParser)
+      (progDesc "Command for caching the data in the S3 bucket." <> fullDesc))) <|>
   (subparser $
-   command "restore" $
-   info
-     (restoreStackCommandParser <|> Restore <$> restoreArgsParser <* helpOption)
-     (progDesc "Command for restoring cache from S3 bucket." <> fullDesc)) <|>
+   metavar "restore" <>
+   (command "restore" $
+    info
+      (restoreStackCommandParser <|> Restore <$> restoreArgsParser <* helpOption)
+      (progDesc "Command for restoring cache from S3 bucket." <> fullDesc))) <|>
   (clearParser
      (pure Clear)
      "clear"
@@ -243,33 +252,38 @@ actionParser =
   where
     clearParser argsParser com desc altPreParse =
       subparser $
-      command com $ info (altPreParse <|> argsParser <* helpOption) (progDesc desc <> fullDesc)
+      metavar com <>
+      (command com $ info (altPreParse <|> argsParser <* helpOption) (progDesc desc <> fullDesc))
     saveStackParser = SaveStack <$> saveStackArgsParser <* helpOption
     saveStackCommandParser =
       subparser $
-      command "stack" $
-      info
-        (SaveStackWork <$> saveStackWorkArgsParser <|> saveStackParser)
-        (progDesc
-           "Command for caching global stack data in the S3 bucket. This will \
+      metavar "stack" <>
+      (command "stack" $
+       info
+         (SaveStackWork <$> saveStackWorkArgsParser <|> saveStackParser)
+         (progDesc
+            "Command for caching global stack data in the S3 bucket. This will \
            \include stack root directory and a couple of others that are used \
            \by stack for storing executables. In order to save local .stack-work \
            \directory(ies), use `cache-s3 save stack work` instead." <>
-         fullDesc)
+          fullDesc))
     restoreStackArgsParser =
       RestoreStackArgs <$> restoreArgsParser <*> stackRootArg <*> stackProjectParser
     restoreStackCommandParser =
       subparser $
-      command "stack" $
-      info
-        (restoreStackWorkParser <|> RestoreStack <$> restoreStackArgsParser <* helpOption)
-        (progDesc "Command for restoring stack data from the S3 bucket." <> fullDesc)
+      metavar "stack" <>
+      (command "stack" $
+       info
+         (restoreStackWorkParser <|> RestoreStack <$> restoreStackArgsParser <* helpOption)
+         (progDesc "Command for restoring stack data from the S3 bucket." <> fullDesc))
     restoreStackWorkParser =
       subparser $
-      command "work" $
-      info
-        (RestoreStackWork <$> restoreStackArgsParser <* helpOption)
-        (progDesc "Command for restoring .stack-work directory(ies) from the S3 bucket." <> fullDesc)
+      metavar "work" <>
+      (command "work" $
+       info
+         (RestoreStackWork <$> restoreStackArgsParser <* helpOption)
+         (progDesc "Command for restoring .stack-work directory(ies) from the S3 bucket." <>
+          fullDesc))
 
 
 main :: IO ()
