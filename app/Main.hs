@@ -72,7 +72,7 @@ commonArgsParser version mS3Bucket =
         \is set or defualt region is specified in ~/.aws/config") <*>
   option
      (Just <$> readText)
-     (long "prefix" <> value Nothing <>
+     (long "prefix" <> value Nothing <> metavar "PREFIX" <>
       help
         "Arbitrary prefix that will be used for storing objects, usually the project \
         \name that this tool is being used for.") <*>
@@ -93,14 +93,14 @@ commonArgsParser version mS3Bucket =
         \used for proper namespacing on S3.") <*>
   option
      (Just <$> readText)
-     (long "suffix" <> value Nothing <>
+     (long "suffix" <> value Nothing <> metavar "SUFFIX" <>
       help
         "Arbitrary suffix that will be used for storing objects in the S3 bucket. \
         \This argument should be used to store multiple cache objects within the \
         \same CI build.") <*>
   option
     readLogLevel
-    (long "verbosity" <> short 'v' <> value LevelInfo <>
+    (long "verbosity" <> metavar "LEVEL" <> short 'v' <> value LevelInfo <>
      help
        "Verbosity level (debug|info|warn|error). Default level is 'info'. \
            \IMPORTANT: Level 'debug' can leak sensitive request information, thus \
@@ -110,8 +110,9 @@ commonArgsParser version mS3Bucket =
      help "Shorten the output by removing timestamp and name of the tool.") <*>
   option
     (readWithMaybe parseBytes)
-    (long "max-size" <> value Nothing <>
-     help "Maximum size of cache that will be acceptable for uploading/downloading to/from S3") <*
+    (long "max-size" <> metavar "SIZE" <> value Nothing <>
+     help "Maximum size of cache that will be acceptable for uploading/downloading to/from S3. \
+          \Examples: 5Gb, 750mb, etc. ") <*
   infoOption
     ("cache-s3-" <> showVersion version)
     (long "version" <> help "Print current verison of the program.")
@@ -263,9 +264,9 @@ actionParser =
          (SaveStackWork <$> saveStackWorkArgsParser <|> saveStackParser)
          (progDesc
             "Command for caching global stack data in the S3 bucket. This will \
-           \include stack root directory and a couple of others that are used \
-           \by stack for storing executables. In order to save local .stack-work \
-           \directory(ies), use `cache-s3 save stack work` instead." <>
+            \include stack root directory and a couple of others that are used \
+            \by stack for storing executables. In order to save local .stack-work \
+            \directory(ies), use `cache-s3 save stack work` instead." <>
           fullDesc))
     restoreStackArgsParser =
       RestoreStackArgs <$> restoreArgsParser <*> stackRootArg <*> stackProjectParser
