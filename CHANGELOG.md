@@ -1,6 +1,12 @@
+# v0.1.7
+
+* Improved command line documentation: [#15](https://github.com/fpco/cache-s3/issues/15)
+* Make `cache-s3` a bit more reselient to errors by not relying on `stack.yaml` format as much: [#17](https://github.com/fpco/cache-s3/issues/17)
+
 # v0.1.6
 
-* Addition ability to store relative paths with `--relative-path` argument: [#11](https://github.com/fpco/cache-s3/issues/11)
+* Addition ability to store relative paths with `--relative-path` argument: [#11](https://github.com/fp
+co/cache-s3/issues/11)
 
 # v0.1.5
 

@@ -83,12 +83,10 @@ getStackWorkPaths mStackRoot mStackYaml mWorkDir = do
   pathPkgs <-
     case eObj of
       Left exc -> throwIO exc
-      Right (Object (HM.lookup "packages" -> mPackages))
-        | isJust mPackages ->
-          case mPackages of
-            Just (Array v) -> return $ V.toList (V.mapMaybe fromStr v)
-            _ -> error $ "Expected 'packages' to be a list in the config: " ++ stackYaml
-      _ -> error $ "Couldn't find 'packages' in the config: " ++ stackYaml
+      Right (Object obj)
+        | Just (Array packages) <- HM.lookup "packages" obj ->
+          pure $ V.toList (V.mapMaybe fromStr packages)
+      _ -> pure []
   return ((projectRoot </> workDir) : map (\pkg -> projectRoot </> pkg </> workDir) pathPkgs)
 
 
