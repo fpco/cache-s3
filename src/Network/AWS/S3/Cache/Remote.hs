@@ -51,6 +51,7 @@ import           Network.AWS.S3.Types
 import           Network.HTTP.Types.Status            (Status (statusMessage),
                                                        status404)
 import           Prelude                              as P
+import           System.IO                            (hClose)
 
 -- | Will check if there is already cache up on AWS and checks if it's contents has changed.
 -- Returns create time date if new cache should be uploaded.
@@ -162,6 +163,7 @@ uploadCache isPublic (tmp, cSize, newHash, comp) = do
   --   passthroughSink (streamUpload (Just (100 * 2 ^ (20 :: Int))) cmu) (void . pure) .|
   --   getProgressReporter reporter cSize .|
   --   sinkNull
+  liftIO $ hClose (tempFileHandle tmp)
   runLoggingAWS_ $
     void $
     concurrentUpload
