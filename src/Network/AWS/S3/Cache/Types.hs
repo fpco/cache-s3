@@ -20,7 +20,7 @@ module Network.AWS.S3.Cache.Types where
 import           Control.Applicative
 import           Control.Lens
 import           Control.Monad.Logger             as L
-import           Control.Monad.Trans.Resource     (MonadResource)
+import           Control.Monad.Trans.Resource     (MonadResource, ReleaseKey)
 import           Crypto.Hash
 import           Data.Attoparsec.ByteString.Char8
 import           Data.ByteString                  (ByteString)
@@ -37,6 +37,7 @@ import           Data.Typeable
 import           Network.AWS.Env
 import           Network.AWS.S3.Types
 import           Prelude                          as P
+import           System.IO                        (Handle)
 
 #if !WINDOWS
 import qualified Data.Conduit.LZ4                 as LZ4
@@ -136,6 +137,12 @@ data Action
   | ClearStackWork !StackProject
   deriving (Show)
 
+
+data TempFile = TempFile
+  { tempFilePath       :: !FilePath
+  , tempFileReleaseKey :: !ReleaseKey
+  , tempFileHandle     :: !Handle
+  }
 
 ----------------
 --- Time -------

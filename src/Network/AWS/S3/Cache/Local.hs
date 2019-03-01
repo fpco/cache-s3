@@ -75,17 +75,22 @@ removeSubpaths dirsCanonical =
 
 prepareCache ::
      (HashAlgorithm h, MonadResource m)
-  => Compression -> ConduitM ByteString Void m (Handle, Word64, Digest h, Compression)
+  => Compression -> ConduitM ByteString Void m (TempFile, Word64, Digest h, Compression)
 prepareCache compression = do
-  (_, _, tmpHandle) <- openTempFile Nothing "cache-s3.tar"
-  hash <- getZipSink
-    (ZipSink (getCompressionConduit compression .| sinkHandle tmpHandle) *> ZipSink sinkHash)
-  cSize <- liftIO $ do
-    hFlush tmpHandle
-    cSize <- hTell tmpHandle
-    hSeek tmpHandle AbsoluteSeek 0
-    return cSize
-  return (tmpHandle, fromInteger cSize, hash, compression)
+  (releaseKey, fileName, tmpHandle) <-
+    openTempFile Nothing ("cache-s3.tar" <.> T.unpack (getCompressionName compression))
+  hash <-
+    getZipSink
+      (ZipSink (getCompressionConduit compression .| sinkHandle tmpHandle) *>
+       ZipSink sinkHash)
+  cSize <-
+    liftIO $ do
+      hFlush tmpHandle
+      cSize <- hTell tmpHandle
+      hSeek tmpHandle AbsoluteSeek 0
+      return cSize
+  let tmpFile = TempFile fileName releaseKey tmpHandle
+  return (tmpFile, fromInteger cSize, hash, compression)
 
 
 -- | Create a compressed tarball in the temporary directory. Compute the hash value of the tarball
@@ -97,7 +102,7 @@ getCacheHandle ::
   -> [FilePath]
   -> h
   -> Compression
-  -> m (Handle, Word64, Digest h, Compression)
+  -> m (TempFile, Word64, Digest h, Compression)
 getCacheHandle dirs relativeDirs _ comp = runConduit $ tarFiles dirs relativeDirs .| prepareCache comp
 
 

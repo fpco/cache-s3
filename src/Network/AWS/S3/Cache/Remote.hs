@@ -21,15 +21,14 @@ import           Control.Lens
 import           Control.Monad.Logger                 as L
 import           Control.Monad.Reader
 import           Control.Monad.Trans.Maybe
-import           Control.Monad.Trans.Resource         (MonadResource)
-import           Control.Monad.Trans.Resource         (ResourceT)
+import           Control.Monad.Trans.Resource         (ResourceT, MonadResource, release)
 import           Crypto.Hash                          (Digest, HashAlgorithm,
                                                        digestFromByteString)
 import           Data.ByteArray                       as BA
 import           Data.ByteString                      as S
 import           Data.ByteString.Base64               as S64
 import           Data.Conduit
-import           Data.Conduit.Binary
+--import           Data.Conduit.Binary
 import           Data.Conduit.List                    as CL
 import           Data.HashMap.Strict                  as HM
 import           Data.Maybe
@@ -52,7 +51,6 @@ import           Network.AWS.S3.Types
 import           Network.HTTP.Types.Status            (Status (statusMessage),
                                                        status404)
 import           Prelude                              as P
-import           System.IO                            (Handle)
 
 -- | Will check if there is already cache up on AWS and checks if it's contents has changed.
 -- Returns create time date if new cache should be uploaded.
@@ -130,9 +128,9 @@ uploadCache ::
      , HashAlgorithm h
      , Typeable h
      )
-  => Bool -> (Handle, Word64, Digest h, Compression)
+  => Bool -> (TempFile, Word64, Digest h, Compression)
   -> MaybeT m ()
-uploadCache isPublic (hdl, cSize, newHash, comp) = do
+uploadCache isPublic (tmp, cSize, newHash, comp) = do
   c <- ask
   when (maybe False (fromIntegral cSize >=) (c ^. maxSize)) $ do
     logAWS LevelInfo $
@@ -157,13 +155,21 @@ uploadCache isPublic (hdl, cSize, newHash, comp) = do
     "Data change detected, caching " <> formatBytes (fromIntegral cSize) <> " with " <> hashKey <>
     ": " <>
     newHashTxt
-  reporter <- getInfoLoggerIO
+  -- reporter <- getInfoLoggerIO
+  -- runLoggingAWS_ $
+  --   runConduit $
+  --   sourceHandle (tempFileHandle tmp) .|
+  --   passthroughSink (streamUpload (Just (100 * 2 ^ (20 :: Int))) cmu) (void . pure) .|
+  --   getProgressReporter reporter cSize .|
+  --   sinkNull
   runLoggingAWS_ $
-    runConduit $
-    sourceHandle hdl .|
-    passthroughSink (streamUpload (Just (100 * 2 ^ (20 :: Int))) cmu) (void . pure) .|
-    getProgressReporter reporter cSize .|
-    sinkNull
+    void $
+    concurrentUpload
+      (Just (8 * 1024 ^ (2 :: Int)))
+      (Just 10)
+      (FP (tempFilePath tmp))
+      cmu
+  release (tempFileReleaseKey tmp)
   logAWS LevelInfo $ "Finished uploading. Files are cached on S3."
 
 
