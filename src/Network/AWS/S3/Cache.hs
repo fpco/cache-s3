@@ -93,8 +93,9 @@ saveCache isPublic hAlgTxt comp dirs relativeDirs conf = do
     conf
 
 
-restoreCache :: Config -> IO Bool
-restoreCache = run (maybe False (const True) <$> runMaybeT (downloadCache restoreFilesFromCache))
+restoreCache :: FileOverwrite -> Config -> IO Bool
+restoreCache overwrite =
+  run (maybe False (const True) <$> runMaybeT (downloadCache (restoreFilesFromCache overwrite)))
 
 mkConfig :: (MonadIO m, MonadCatch m) =>
             CommonArgs -> m Config
@@ -129,12 +130,12 @@ runCacheS3 ca@CommonArgs {..} action = do
         Save saveStackArgs {savePaths = savePaths saveStackArgs ++ stackLocalPaths}
     Restore (RestoreArgs {..}) -> do
       config <- mkConfig ca
-      restoreSuccessfull <- restoreCache (config & maxAge .~ restoreMaxAge)
+      restoreSuccessfull <- restoreCache restoreOverwrite (config & maxAge .~ restoreMaxAge)
       case (restoreSuccessfull, restoreBaseBranch) of
         (False, Just _) | restoreBaseBranch /= commonGitBranch -> do
           let baseObjKey = mkObjectKey commonPrefix restoreBaseBranch commonSuffix
           void $
-            restoreCache $
+            restoreCache restoreOverwrite $
             Config
               commonBucket
               baseObjKey

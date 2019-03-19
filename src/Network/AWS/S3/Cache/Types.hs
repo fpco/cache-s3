@@ -55,6 +55,9 @@ data Config = Config
 
 makeLensesWith classUnderscoreNoPrefixFields ''Config
 
+newtype FileOverwrite =
+  FileOverwrite L.LogLevel
+  deriving (Eq, Show)
 
 instance HasEnv Config where
   environment = confEnv
@@ -107,6 +110,7 @@ data SaveStackWorkArgs = SaveStackWorkArgs
 data RestoreArgs = RestoreArgs
   { restoreBaseBranch :: !(Maybe Text)
   , restoreMaxAge     :: !(Maybe NominalDiffTime)
+  , restoreOverwrite  :: !FileOverwrite
   } deriving (Show)
 
 

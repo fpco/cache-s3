@@ -1,3 +1,4 @@
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
@@ -13,11 +14,11 @@
 
 module Network.AWS.S3.Cache.Local where
 
-import           Control.Exception.Safe       (MonadCatch)
-import           Control.Monad                (void)
-import           Control.Monad.IO.Class       (liftIO)
+import           Control.Exception.Safe       (MonadThrow, MonadCatch, throwString)
+import           Control.Monad                (when, void)
+import           Control.Monad.IO.Class       (MonadIO(liftIO))
 import           Control.Monad.Logger
-import           Control.Monad.Trans.Resource (MonadResource, ResourceT)
+import           Control.Monad.Trans.Resource (MonadResource)
 import           Crypto.Hash                  (Digest, HashAlgorithm)
 import           Crypto.Hash.Conduit
 import           Data.ByteString              as S
@@ -108,17 +109,26 @@ getCacheHandle dirs relativeDirs _ comp = runConduit $ tarFiles dirs relativeDir
 
 -- | Restores all of the files from the tarball and computes the hash at the same time.
 restoreFilesFromCache ::
-     HashAlgorithm h
-  => Compression -- ^ Compression algorithm the stream is expected to be compressed with.
+     (MonadIO m, MonadThrow m, MonadResource m, HashAlgorithm h)
+  => FileOverwrite
+  -> (LogLevel -> Text -> IO ())
+  -> Compression -- ^ Compression algorithm the stream is expected to be compressed with.
   -> h -- ^ Hashing algorithm to use for computation of hash value of the extracted tarball.
-  -> ConduitM ByteString Void (ResourceT IO) (Digest h)
-restoreFilesFromCache comp _ =
+  -> ConduitM ByteString Void m (Digest h)
+restoreFilesFromCache (FileOverwrite level) logger comp _ =
   getDeCompressionConduit comp .|
   getZipConduit (ZipConduit (untarWithFinalizers restoreFile') *> ZipConduit sinkHash)
   where
     restoreFile' fi = do
       case fileType fi of
-        FTDirectory -- Make sure nested folders:
+        FTDirectory -- Make sure nested folders are created:
          -> liftIO $ createDirectoryIfMissing True (decodeFilePath (filePath fi))
+        FTNormal -> do
+          let fp = getFileInfoPath fi
+          fileExist <- liftIO $ doesFileExist fp
+          when fileExist $ do
+            when (level == LevelError) $
+              throwString $ "File with name already exists: " ++ fp
+            liftIO $ logger level $ "Restoring an existing file: " <> T.pack fp
         _ -> return ()
       restoreFile fi

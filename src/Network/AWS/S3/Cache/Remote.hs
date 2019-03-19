@@ -156,13 +156,6 @@ uploadCache isPublic (tmp, cSize, newHash, comp) = do
     "Data change detected, caching " <> formatBytes (fromIntegral cSize) <> " with " <> hashKey <>
     ": " <>
     newHashTxt
-  -- reporter <- getInfoLoggerIO
-  -- runLoggingAWS_ $
-  --   runConduit $
-  --   sourceHandle (tempFileHandle tmp) .|
-  --   passthroughSink (streamUpload (Just (100 * 2 ^ (20 :: Int))) cmu) (void . pure) .|
-  --   getProgressReporter reporter cSize .|
-  --   sinkNull
   liftIO $ hClose (tempFileHandle tmp)
   runLoggingAWS_ $
     void $
@@ -172,6 +165,13 @@ uploadCache isPublic (tmp, cSize, newHash, comp) = do
       (FP (tempFilePath tmp))
       cmu
   release (tempFileReleaseKey tmp)
+  -- logger <- getLoggerIO
+  -- runLoggingAWS_ $
+  --   runConduit $
+  --   sourceHandle hdl .|
+  --   passthroughSink (streamUpload (Just (100 * 2 ^ (20 :: Int))) cmu) (void . pure) .|
+  --   getProgressReporter (logger LevelInfo) cSize .|
+  --   sinkNull
   logAWS LevelInfo $ "Finished uploading. Files are cached on S3."
 
 
@@ -213,8 +213,8 @@ downloadCache ::
      , HasMaxAge c (Maybe NominalDiffTime)
      , HasMaxSize c (Maybe Integer)
      )
-  => (forall h. HashAlgorithm h =>
-                  Compression -> h -> Sink S.ByteString (ResourceT IO) (Digest h))
+  => (forall h . HashAlgorithm h =>
+       (L.LogLevel -> Text -> IO ()) -> Compression -> h -> Sink S.ByteString (ResourceT IO) (Digest h))
   -> MaybeT m ()
 downloadCache sink = do
   c <- ask
@@ -281,12 +281,12 @@ downloadCache sink = do
       logAWS LevelInfo $
         "Restoring cache from " <> formatRFC822 createTime <> " with total size: " <>
         formatBytes len
-      reporter <- getInfoLoggerIO
+      logger <- getLoggerIO
       hashComputed <-
         liftIO $
         runResourceT $
         resp ^. gorsBody ^. to _streamBody $$+-
-        (getProgressReporter reporter (fromInteger len) .| sink compAlg hashAlg)
+        (getProgressReporter (logger LevelInfo) (fromInteger len) .| sink logger compAlg hashAlg)
       if (hashComputed == hashExpected)
         then do
           logAWS LevelInfo $
@@ -422,20 +422,20 @@ reportProgress reporter (thresh, stepSum, prevSum, prevTime) chunkSize
 
 
 -- | Helper action that returns a function that can do info level logging in the `MonadIO`.
-getInfoLoggerIO :: (MonadIO n, MonadLoggerIO m) => m (Text -> n ())
-getInfoLoggerIO = do
+getLoggerIO :: (MonadLoggerIO m) => m (L.LogLevel -> Text -> IO ())
+getLoggerIO = do
   loggerIO <- askLoggerIO
-  return $ \ txt -> liftIO $ loggerIO defaultLoc "" LevelInfo (toLogStr txt)
+  return $ \ level txt -> loggerIO defaultLoc "" level (toLogStr txt)
 
 
 -- | Creates a conduit that will execute supplied action 10 time each for every 10% of the data is
 -- being passed through it. Supplied action will receive `Text` with status and speed of processing.
 getProgressReporter ::
-     MonadIO m => (Text -> m ()) -> Word64 -> ConduitM S.ByteString S.ByteString m ()
+     MonadIO m => (Text -> IO ()) -> Word64 -> ConduitM S.ByteString S.ByteString m ()
 getProgressReporter reporterTxt totalSize = do
   let thresh = [(p, (totalSize * p) `div` 100) | p <- [10,20 .. 100]]
       reporter perc speed =
-        reporterTxt $
+        liftIO $ reporterTxt $
         "Progress: " <> T.pack (show perc) <> "%, speed: " <> formatBytes (fromIntegral speed) <>
         "/s"
       reportProgressAccum chunk acc = do

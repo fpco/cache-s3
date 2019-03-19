@@ -154,17 +154,27 @@ restoreArgsParser =
   option
     (Just <$> readText)
     (long "base-branch" <> value Nothing <>
-     help "Base git branch. This branch will be used as a readonly fallback upon a \
+     help
+       "Base git branch. This branch will be used as a readonly fallback upon a \
           \cache miss, eg. whenever it is a first build for a new branch, it is possible \
           \to use cache from 'master' branch by setting --base-branch=master") <*>
   option
-     (readWithMaybe parseDiffTime)
-     (long "max-age" <> value Nothing <>
-      help
-        "Amount of time cache will be valid for from the moment it was initially uploaded to S3, \
+    (readWithMaybe parseDiffTime)
+    (long "max-age" <> value Nothing <>
+     help
+       "Amount of time cache will be valid for from the moment it was initially uploaded to S3, \
         \i.e. updating cache doesn't reset the time counter. Accepts common variations of \
         \(year|day|hour|min|sec), \
-        \, eg. --max-age='30 days 1 hour' or --max-age='1h 45m'")
+        \, eg. --max-age='30 days 1 hour' or --max-age='1h 45m'") <*>
+  (FileOverwrite <$>
+   option
+     readLogLevel
+     (long "overwrite" <> metavar "OVERWRITE" <> short 'v' <> value LevelWarn <>
+      help
+        "Which log to emmit when overwriting an existing file (debug|info|warn|error). \
+        \If set to 'error', restoring processing will terminate. Default value is 'warn'. \
+        \IMPORTANT: Level 'debug' can leak sensitive request information, thus \
+        \should NOT be used in production."))
 
 
 stackRootArg :: Parser (Maybe FilePath)
