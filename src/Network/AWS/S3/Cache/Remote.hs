@@ -157,6 +157,7 @@ uploadCache isPublic (tmp, cSize, newHash, comp) = do
     ": " <>
     newHashTxt
   liftIO $ hClose (tempFileHandle tmp)
+  startTime <- liftIO getCurrentTime
   runLoggingAWS_ $
     void $
     concurrentUpload
@@ -165,6 +166,8 @@ uploadCache isPublic (tmp, cSize, newHash, comp) = do
       (FP (tempFilePath tmp))
       cmu
   release (tempFileReleaseKey tmp)
+  endTime <- liftIO getCurrentTime
+  reportSpeed cSize $ diffUTCTime endTime startTime
   -- logger <- getLoggerIO
   -- runLoggingAWS_ $
   --   runConduit $
@@ -173,6 +176,17 @@ uploadCache isPublic (tmp, cSize, newHash, comp) = do
   --   getProgressReporter (logger LevelInfo) cSize .|
   --   sinkNull
   logAWS LevelInfo $ "Finished uploading. Files are cached on S3."
+
+reportSpeed ::
+     (MonadReader a m, MonadLogger m, HasObjectKey a ObjectKey, Real p1, Real p2)
+  => p1
+  -> p2
+  -> m ()
+reportSpeed cSize delta = logAWS LevelInfo $ "Average speed: " <> formatBytes speed <> "/s"
+  where
+    speed
+      | delta == 0 = 0
+      | otherwise = round (toRational cSize / toRational delta)
 
 
 onNothing :: Monad m => Maybe b -> m a -> MaybeT m b
