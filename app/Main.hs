@@ -169,11 +169,11 @@ restoreArgsParser =
   (FileOverwrite <$>
    option
      readLogLevel
-     (long "overwrite" <> metavar "OVERWRITE" <> value LevelWarn <>
+     (long "overwrite" <> metavar "OVERWRITE" <> value LevelDebug <>
       help
         "Which log level to emmit when overwriting an existing file (debug|info|warn|error). \
         \If set to 'error', restoring will be terminated whenever an existing file is detected. \
-        \Default is 'warn'."))
+        \Default is 'debug'."))
 
 
 stackRootArg :: Parser (Maybe FilePath)
