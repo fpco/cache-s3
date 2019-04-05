@@ -1,10 +1,9 @@
-{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE RankNTypes            #-}
-{-# LANGUAGE RecordWildCards       #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TypeApplications      #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 -- |
 -- Module      : Network.AWS.S3.Cache.Remote
 -- Copyright   : (c) FP Complete 2017
@@ -15,43 +14,40 @@
 --
 module Network.AWS.S3.Cache.Remote where
 
-import           Control.Applicative
-import           Control.Exception.Safe
-import           Control.Lens
-import           Control.Monad.Logger                 as L
-import           Control.Monad.Reader
-import           Control.Monad.Trans.Maybe
-import           Control.Monad.Trans.Resource         (ResourceT, MonadResource, release)
-import           Crypto.Hash                          (Digest, HashAlgorithm,
-                                                       digestFromByteString)
-import           Data.ByteArray                       as BA
-import           Data.ByteString                      as S
-import           Data.ByteString.Base64               as S64
-import           Data.Conduit
---import           Data.Conduit.Binary
-import           Data.Conduit.List                    as CL
-import           Data.HashMap.Strict                  as HM
-import           Data.Maybe
-import           Data.Monoid                          ((<>))
-import           Data.Ratio                           ((%))
-import           Data.Text                            as T
-import           Data.Text.Encoding                   as T
-import           Data.Text.Encoding.Error             as T
-import           Data.Time
-import           Data.Word                            (Word64)
-import           Network.AWS
-import           Network.AWS.Data.Body
-import           Network.AWS.Data.Text                (toText)
-import           Network.AWS.S3.Cache.Types
-import           Network.AWS.S3.CreateMultipartUpload
-import           Network.AWS.S3.DeleteObject
-import           Network.AWS.S3.GetObject
-import           Network.AWS.S3.StreamingUpload
-import           Network.AWS.S3.Types
-import           Network.HTTP.Types.Status            (Status (statusMessage),
-                                                       status404)
-import           Prelude                              as P
-import           System.IO                            (hClose)
+import Control.Applicative
+import Control.Exception.Safe
+import Control.Lens
+import Control.Monad.Logger as L
+import Control.Monad.Reader
+import Control.Monad.Trans.Maybe
+import Control.Monad.Trans.Resource (MonadResource, ResourceT, release)
+import Crypto.Hash (Digest, HashAlgorithm, digestFromByteString)
+import Data.ByteArray as BA
+import Data.ByteString as S
+import Data.ByteString.Base64 as S64
+import Data.Conduit
+import Data.Conduit.List as CL
+import Data.HashMap.Strict as HM
+import Data.Maybe
+import Data.Monoid ((<>))
+import Data.Ratio ((%))
+import Data.Text as T
+import Data.Text.Encoding as T
+import Data.Text.Encoding.Error as T
+import Data.Time
+import Data.Word (Word64)
+import Network.AWS
+import Network.AWS.Data.Body
+import Network.AWS.Data.Text (toText)
+import Network.AWS.S3.Cache.Types
+import Network.AWS.S3.CreateMultipartUpload
+import Network.AWS.S3.DeleteObject
+import Network.AWS.S3.GetObject
+import Network.AWS.S3.StreamingUpload
+import Network.AWS.S3.Types
+import Network.HTTP.Types.Status (Status(statusMessage), status404)
+import Prelude as P
+import System.IO (hClose)
 
 -- | Will check if there is already cache up on AWS and checks if it's contents has changed.
 -- Returns create time date if new cache should be uploaded.
@@ -72,25 +68,23 @@ hasCacheChanged newHash = do
   c <- ask
   let getObjReq = getObject (c ^. bucketName) (c ^. objectKey)
       hashKey = getHashMetaKey newHash
-      onErr status = do
-        case () of
-          ()
-            | status == status404 -> do
-              logAWS LevelInfo "No previously stored cache was found."
-              return (Nothing, (Nothing, Nothing))
-          _ -> return (Just LevelError, (Nothing, Nothing))
+      onErr status
+        | status == status404 = do
+          logAWS LevelInfo "No previously stored cache was found."
+          return (Nothing, (Nothing, Nothing))
+        | otherwise = return (Just LevelError, (Nothing, Nothing))
       onSucc resp = do
-        logAWS LevelDebug $ "Discovered previous cache."
+        logAWS LevelDebug "Discovered previous cache."
         let mOldHash = HM.lookup hashKey (resp ^. gorsMetadata)
             mCreateTime =
-               (HM.lookup metaCreateTimeKey (resp ^. gorsMetadata) >>= parseISO8601) <|>
+              (HM.lookup metaCreateTimeKey (resp ^. gorsMetadata) >>= parseISO8601) <|>
               (resp ^. gorsLastModified)
         case mOldHash of
           Just oldHash ->
             logAWS LevelDebug $ "Hash value for previous cache is " <> hashKey <> ": " <> oldHash
-          Nothing -> do
+          Nothing ->
             logAWS LevelWarn $ "Previous cache is missing a hash value '" <> hashKey <> "'"
-        return $ (mOldHash, mCreateTime)
+        return (mOldHash, mCreateTime)
   (mOldHashTxt, mCreateTime) <- sendAWS getObjReq onErr onSucc
   createTime <- maybe (liftIO getCurrentTime) return mCreateTime
   mOldHash <- maybe (return Nothing) decodeHash mOldHashTxt
@@ -150,7 +144,7 @@ uploadCache isPublic (tmp, cSize, newHash, comp) = do
           , (compressionMetaKey, getCompressionName comp)
           ] &
         if isPublic
-          then cmuACL .~ Just OPublicRead
+          then cmuACL ?~ OPublicRead
           else id
   logAWS LevelInfo $
     "Data change detected, caching " <> formatBytes (fromIntegral cSize) <> " with " <> hashKey <>
@@ -168,14 +162,7 @@ uploadCache isPublic (tmp, cSize, newHash, comp) = do
   release (tempFileReleaseKey tmp)
   endTime <- liftIO getCurrentTime
   reportSpeed cSize $ diffUTCTime endTime startTime
-  -- logger <- getLoggerIO
-  -- runLoggingAWS_ $
-  --   runConduit $
-  --   sourceHandle hdl .|
-  --   passthroughSink (streamUpload (Just (100 * 2 ^ (20 :: Int))) cmu) (void . pure) .|
-  --   getProgressReporter (logger LevelInfo) cSize .|
-  --   sinkNull
-  logAWS LevelInfo $ "Finished uploading. Files are cached on S3."
+  logAWS LevelInfo "Finished uploading. Files are cached on S3."
 
 reportSpeed ::
      (MonadReader a m, MonadLogger m, HasObjectKey a ObjectKey, Real p1, Real p2)
@@ -190,7 +177,7 @@ reportSpeed cSize delta = logAWS LevelInfo $ "Average speed: " <> formatBytes sp
 
 
 onNothing :: Monad m => Maybe b -> m a -> MaybeT m b
-onNothing mArg whenNothing = do
+onNothing mArg whenNothing =
   case mArg of
     Nothing -> do
       _ <- lift whenNothing
@@ -213,7 +200,7 @@ deleteCache = do
   c <- ask
   sendAWS_
     (deleteObject (c ^. bucketName) (c ^. objectKey))
-    (const $ logAWS LevelInfo $ "Clear cache request was successfully submitted.")
+    (const $ logAWS LevelInfo "Clear cache request was successfully submitted.")
 
 -- | Download an object from S3 and handle its content using the supplied sink.
 downloadCache ::
@@ -233,22 +220,20 @@ downloadCache ::
 downloadCache sink = do
   c <- ask
   let getObjReq = getObject (c ^. bucketName) (c ^. objectKey)
-      onErr status = do
-        case () of
-          ()
-            | status == status404 -> do
-              logAWS LevelInfo "No previously stored cache was found."
-              MaybeT $ return Nothing
-          _ -> return (Just LevelError, ())
+      onErr status
+        | status == status404 = do
+          logAWS LevelInfo "No previously stored cache was found."
+          MaybeT $ return Nothing
+        | otherwise = pure (Just LevelError, ())
   logAWS LevelDebug "Checking for previously stored cache."
   sendAWS getObjReq onErr $ \resp -> do
-    logAWS LevelDebug $ "Starting to download previous cache."
+    logAWS LevelDebug "Starting to download previous cache."
     compAlgTxt <-
       HM.lookup compressionMetaKey (resp ^. gorsMetadata) `onNothing`
       logAWS LevelWarn "Missing information on compression algorithm."
     compAlg <-
       readCompression compAlgTxt `onNothing`
-      (logAWS LevelWarn $ "Compression algorithm is not supported: " <> compAlgTxt)
+      logAWS LevelWarn ("Compression algorithm is not supported: " <> compAlgTxt)
     logAWS LevelDebug $ "Compression algorithm used: " <> compAlgTxt
     hashAlgName <-
       HM.lookup metaHashAlgorithmKey (resp ^. gorsMetadata) `onNothing`
@@ -256,14 +241,14 @@ downloadCache sink = do
     logAWS LevelDebug $ "Hashing algorithm used: " <> hashAlgName
     hashTxt <-
       HM.lookup hashAlgName (resp ^. gorsMetadata) `onNothing`
-      (logAWS LevelWarn $ "Cache is missing a hash value '" <> hashAlgName <> "'")
+      logAWS LevelWarn ("Cache is missing a hash value '" <> hashAlgName <> "'")
     logAWS LevelDebug $ "Hash value is " <> hashAlgName <> ": " <> hashTxt
     let mCreateTime = do
           createTimeTxt <- HM.lookup metaCreateTimeKey (resp ^. gorsMetadata)
           parseISO8601 createTimeTxt
     createTime <-
       (mCreateTime <|> (resp ^. gorsLastModified)) `onNothing`
-      (logAWS LevelWarn $ "Cache is missing creation time info.")
+      logAWS LevelWarn "Cache is missing creation time info."
     logAWS LevelDebug $ "Cache creation timestamp:  " <> formatRFC822 createTime
     case c ^. maxAge of
       Nothing -> return ()
@@ -282,13 +267,13 @@ downloadCache sink = do
           logAWS LevelInfo $ "Refusing to restore, cache is too big: " <> formatBytes len
           deleteCache
           MaybeT $ return Nothing
-    let noHashAlgSupport _ = do
+    let noHashAlgSupport _ =
           logAWS LevelWarn $ "Hash algorithm used for the cache is not supported: " <> hashAlgName
     withHashAlgorithm_ hashAlgName noHashAlgSupport $ \hashAlg -> do
       mHashExpected <- decodeHash hashTxt
       hashExpected <-
         mHashExpected `onNothing`
-        (logAWS LevelError $ "Problem decoding cache's hash value: " <> hashTxt)
+        logAWS LevelError ("Problem decoding cache's hash value: " <> hashTxt)
       len <-
         (resp ^. gorsContentLength) `onNothing`
         logAWS LevelError "Did not receive expected cache size form AWS"
@@ -300,9 +285,9 @@ downloadCache sink = do
         liftIO $
         runResourceT $
         resp ^. gorsBody ^. to _streamBody $$+-
-        (getProgressReporter (logger LevelInfo) (fromInteger len) .| sink logger compAlg hashAlg)
-      if (hashComputed == hashExpected)
-        then do
+        getProgressReporter (logger LevelInfo) (fromInteger len) .| sink logger compAlg hashAlg
+      if hashComputed == hashExpected
+        then
           logAWS LevelInfo $
             "Successfully restored previous cache with hash: " <> encodeHash hashComputed
         else do
@@ -379,7 +364,7 @@ runLoggingAWS ::
   -> m b
 runLoggingAWS action onErr onSucc = do
   conf <- ask
-  eResp <- runAWS conf $ trying _Error $ action
+  eResp <- runAWS conf $ trying _Error action
   case eResp of
     Left err -> do
       (errMsg, status) <-

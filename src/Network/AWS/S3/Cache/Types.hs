@@ -1,12 +1,12 @@
-{-# LANGUAGE CPP                    #-}
-{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE LambdaCase             #-}
-{-# LANGUAGE MultiParamTypeClasses  #-}
-{-# LANGUAGE OverloadedStrings      #-}
-{-# LANGUAGE RankNTypes             #-}
-{-# LANGUAGE ScopedTypeVariables    #-}
-{-# LANGUAGE TemplateHaskell        #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
 -- |
 -- Module      : Network.AWS.S3.Cache.Types
 -- Copyright   : (c) FP Complete 2017
@@ -17,30 +17,31 @@
 --
 module Network.AWS.S3.Cache.Types where
 
-import           Control.Applicative
-import           Control.Lens
-import           Control.Monad.Logger             as L
-import           Control.Monad.Trans.Resource     (MonadResource, ReleaseKey)
-import           Crypto.Hash
-import           Data.Attoparsec.ByteString.Char8
-import           Data.ByteString                  (ByteString)
-import           Data.ByteString.Char8            as S8
-import           Data.Char                        as C (toLower)
-import           Data.Conduit                     (Conduit)
-import           Data.Conduit.Zlib
-import           Data.Maybe                       (fromMaybe, listToMaybe)
-import           Data.Monoid                      ((<>))
-import           Data.Text                        as T
-import           Data.Text.Encoding               as T
-import           Data.Time
-import           Data.Typeable
-import           Network.AWS.Env
-import           Network.AWS.S3.Types
-import           Prelude                          as P
-import           System.IO                        (Handle)
+import Control.Applicative
+import Control.Lens
+import Data.Functor (($>))
+import Control.Monad.Logger as L
+import Control.Monad.Trans.Resource (MonadResource, ReleaseKey)
+import Crypto.Hash
+import Data.Attoparsec.ByteString.Char8
+import Data.ByteString (ByteString)
+import Data.ByteString.Char8 as S8
+import Data.Char as C (toLower)
+import Data.Conduit (Conduit)
+import Data.Conduit.Zlib
+import Data.Maybe (fromMaybe, listToMaybe)
+import Data.Monoid ((<>))
+import Data.Text as T
+import Data.Text.Encoding as T
+import Data.Time
+import Data.Typeable
+import Network.AWS.Env
+import Network.AWS.S3.Types
+import Prelude as P
+import System.IO (Handle)
 
 #if !WINDOWS
-import qualified Data.Conduit.LZ4                 as LZ4
+import qualified Data.Conduit.LZ4 as LZ4
 #endif
 
 data Config = Config
@@ -161,7 +162,7 @@ data Interval
   deriving (Show)
 
 formatDiffTime :: NominalDiffTime -> Text
-formatDiffTime nd = go "" $ fmap Seconds $ divMod (round nd) 60
+formatDiffTime nd = go "" (Seconds <$> divMod (round nd) 60)
   where
     go acc =
       \case
@@ -170,10 +171,10 @@ formatDiffTime nd = go "" $ fmap Seconds $ divMod (round nd) 60
         (n, Days d)
           | d > 0 || n > 0 -> go (showTime d "day" ", " acc) (0, Years n)
         (n, Hours h)
-          | h > 0 || n > 0 -> go (showTime h "hour" ", " acc) $ fmap Days $ divMod n 365
+          | h > 0 || n > 0 -> go (showTime h "hour" ", " acc) (Days <$> divMod n 365)
         (n, Minutes m)
-          | m > 0 || n > 0 -> go (showTime m "minute" ", " acc) $ fmap Hours $ divMod n 24
-        (n, Seconds s) -> go (showTime s "second" "" acc) $ fmap Minutes $ divMod n 60
+          | m > 0 || n > 0 -> go (showTime m "minute" ", " acc) (Hours <$> divMod n 24)
+        (n, Seconds s) -> go (showTime s "second" "" acc) (Minutes <$> divMod n 60)
         _ -> acc
     showTime 0 _    _   acc = acc
     showTime t tTxt sep acc =
@@ -197,7 +198,7 @@ parseDiffTime =
         Hours h -> h * 3600
         Minutes m -> m * 60
         Seconds s -> s
-    maybePlural = (char 's' *> pure ()) <|> pure ()
+    maybePlural = (char 's' $> ()) <|> pure ()
     intervalParser =
       many1 $
       skipSpace *>
@@ -233,12 +234,12 @@ parseBytes =
         (<|>)
         (P.map (string . S8.pack . P.map C.toLower) abbrs)
         ["", "kb", "mb", "gb", "tb", "pb", "eb", "zb", "yb"]
-    multiplier = skipSpace *> choice [p *> pure f | (p, f) <- P.reverse $ P.zip abbrsParser mults]
+    multiplier = skipSpace *> choice [p $> f | (p, f) <- P.reverse $ P.zip abbrsParser mults]
 
 
 formatBytes :: Integer -> Text
 formatBytes val =
-  fmt $ fromMaybe (P.last scaled) $ listToMaybe $ P.dropWhile ((>= 10240) . fst) $ scaled
+  fmt $ fromMaybe (P.last scaled) $ listToMaybe $ P.dropWhile ((>= 10240) . fst) scaled
   where
     fmt (sVal10, n) =
       (\(d, m) -> T.pack (show d) <> "." <> T.pack (show m)) (sVal10 `divMod` 10) <> " " <> n

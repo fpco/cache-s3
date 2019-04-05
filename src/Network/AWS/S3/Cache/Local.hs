@@ -1,8 +1,8 @@
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 -- |
 -- Module      : Network.AWS.S3.Cache.Local
 -- Copyright   : (c) FP Complete 2017
@@ -14,30 +14,30 @@
 
 module Network.AWS.S3.Cache.Local where
 
-import           Control.Exception.Safe       (MonadThrow, MonadCatch, throwString)
-import           Control.Monad                (when, void)
-import           Control.Monad.IO.Class       (MonadIO(liftIO))
-import           Control.Monad.Logger
-import           Control.Monad.Trans.Resource (MonadResource)
-import           Crypto.Hash                  (Digest, HashAlgorithm)
-import           Crypto.Hash.Conduit
-import           Data.ByteString              as S
-import           Data.Conduit
-import           Data.Conduit.Binary
-import           Data.Conduit.List            as C
-import           Data.Conduit.Tar
-import           Data.List                    as L
-import           Data.Maybe                   as Maybe
-import           Data.Monoid                  ((<>))
-import           Data.Text                    as T
-import           Data.Void
-import           Data.Word
-import           Network.AWS.S3.Cache.Types
-import           Prelude                      as P
-import           System.Directory
-import           System.FilePath
-import           System.IO                    hiding (openTempFile)
-import           System.IO.Temp
+import Control.Exception.Safe (MonadCatch, MonadThrow, throwString)
+import Control.Monad (void, when)
+import Control.Monad.IO.Class (MonadIO(liftIO))
+import Control.Monad.Logger
+import Control.Monad.Trans.Resource (MonadResource)
+import Crypto.Hash (Digest, HashAlgorithm)
+import Crypto.Hash.Conduit
+import Data.ByteString as S
+import Data.Conduit
+import Data.Conduit.Binary
+import Data.Conduit.List as C
+import Data.Conduit.Tar
+import Data.List as L
+import Data.Maybe as Maybe
+import Data.Monoid ((<>))
+import Data.Text as T
+import Data.Void
+import Data.Word
+import Network.AWS.S3.Cache.Types
+import Prelude as P
+import System.Directory
+import System.FilePath
+import System.IO hiding (openTempFile)
+import System.IO.Temp
 
 tarFiles :: (MonadCatch m, MonadResource m, MonadLogger m) =>
             [FilePath] -> [FilePath] -> ConduitM a ByteString m ()

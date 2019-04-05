@@ -1,7 +1,7 @@
-{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 -- |
 -- Module      : Network.AWS.S3.Cache
 -- Copyright   : (c) FP Complete 2017
@@ -17,28 +17,28 @@ module Network.AWS.S3.Cache
   , module Network.AWS.S3.Cache.Types
   ) where
 
-import           Control.Exception.Safe       (MonadCatch)
-import           Control.Lens
-import           Control.Monad                (when)
-import           Control.Monad.Logger         as L
-import           Control.Monad.Reader
-import           Control.Monad.Trans.AWS
-import           Control.Monad.Trans.Control  (MonadBaseControl)
-import           Control.Monad.Trans.Maybe
-import           Control.Monad.Trans.Resource (ResourceT)
-import           Data.ByteString.Char8        as S8
-import           Data.Monoid                  ((<>))
-import           Data.Text                    as T
-import           Data.Time
-import           Data.Version                 (Version)
-import           Network.AWS.S3.Cache.Local
-import           Network.AWS.S3.Cache.Remote
-import           Network.AWS.S3.Cache.Stack
-import           Network.AWS.S3.Cache.Types
-import qualified Paths_cache_s3               as Paths
-import           Prelude                      as P
-import           System.Exit
-import           System.Log.FastLogger        (fromLogStr)
+import Control.Exception.Safe (MonadCatch)
+import Control.Lens
+import Control.Monad (when)
+import Control.Monad.Logger as L
+import Control.Monad.Reader
+import Control.Monad.Trans.AWS
+import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.Trans.Maybe
+import Control.Monad.Trans.Resource (ResourceT)
+import Data.ByteString.Char8 as S8
+import Data.Monoid ((<>))
+import Data.Text as T
+import Data.Time
+import Data.Version (Version)
+import Network.AWS.S3.Cache.Local
+import Network.AWS.S3.Cache.Remote
+import Network.AWS.S3.Cache.Stack
+import Network.AWS.S3.Cache.Types
+import qualified Paths_cache_s3 as Paths
+import Prelude as P
+import System.Exit
+import System.Log.FastLogger (fromLogStr)
 
 
 showLogLevel :: L.LogLevel -> LogStr
