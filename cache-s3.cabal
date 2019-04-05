@@ -1,5 +1,5 @@
 name:                cache-s3
-version:             0.1.7
+version:             0.1.8
 synopsis:            Use an AWS S3 bucket for caching your stack build environment.
 description:         Save local directories to S3 bucket and restore them later to their
                      original locations. Designed for stack usage during CI, but can be

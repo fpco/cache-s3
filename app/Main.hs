@@ -103,8 +103,8 @@ commonArgsParser version mS3Bucket =
     (long "verbosity" <> metavar "LEVEL" <> short 'v' <> value LevelInfo <>
      help
        "Verbosity level (debug|info|warn|error). Default level is 'info'. \
-           \IMPORTANT: Level 'debug' can leak sensitive request information, thus \
-           \should NOT be used in production.") <*>
+       \IMPORTANT: Level 'debug' can leak sensitive request information, thus \
+       \should NOT be used in production.") <*>
   switch
     (long "concise" <> short 'c' <>
      help "Shorten the output by removing timestamp and name of the tool.") <*>
@@ -169,12 +169,11 @@ restoreArgsParser =
   (FileOverwrite <$>
    option
      readLogLevel
-     (long "overwrite" <> metavar "OVERWRITE" <> short 'v' <> value LevelWarn <>
+     (long "overwrite" <> metavar "OVERWRITE" <> value LevelWarn <>
       help
-        "Which log to emmit when overwriting an existing file (debug|info|warn|error). \
-        \If set to 'error', restoring processing will terminate. Default value is 'warn'. \
-        \IMPORTANT: Level 'debug' can leak sensitive request information, thus \
-        \should NOT be used in production."))
+        "Which log level to emmit when overwriting an existing file (debug|info|warn|error). \
+        \If set to 'error', restoring will be terminated whenever an existing file is detected. \
+        \Default is 'warn'."))
 
 
 stackRootArg :: Parser (Maybe FilePath)

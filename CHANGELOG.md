@@ -1,3 +1,9 @@
+# v0.1.8
+
+* Addition of `--overwrite` flag that emmits log messages whenever a file is about to be replaced
+  upon cache restoration
+* Implement concurrent uploading. Addresses the upload part of [#20](https://github.com/fpco/cache-s3/issues/20)
+
 # v0.1.7
 
 * Improved command line documentation: [#15](https://github.com/fpco/cache-s3/issues/15)
