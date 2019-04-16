@@ -1,6 +1,7 @@
-{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -131,7 +132,7 @@ uploadCache ::
   -> TempFile -- ^ Temporary file where cache has been written to
   -> (Word64, Digest h) -- ^ Size and hash of the temporary file with cache
   -> MaybeT m ()
-uploadCache isPublic TempFile {tempFilePath, tempFileCompression} (cSize, newHash) = do
+uploadCache isPublic tmpFile (cSize, newHash) = do
   c <- ask
   when (maybe False (fromIntegral cSize >=) (c ^. maxSize)) $ do
     logAWS LevelInfo $
@@ -147,7 +148,7 @@ uploadCache isPublic TempFile {tempFilePath, tempFileCompression} (cSize, newHas
           [ (metaHashAlgorithmKey, hashKey)
           , (metaCreateTimeKey, formatISO8601 createTime)
           , (hashKey, newHashTxt)
-          , (compressionMetaKey, getCompressionName tempFileCompression)
+          , (compressionMetaKey, getCompressionName (tempFileCompression tmpFile))
           ] &
         if isPublic
           then cmuACL ?~ OPublicRead
@@ -157,13 +158,20 @@ uploadCache isPublic TempFile {tempFilePath, tempFileCompression} (cSize, newHas
     ": " <>
     newHashTxt
   startTime <- liftIO getCurrentTime
+#if WINDOWS
+  runLoggingAWS_ $
+    runConduit $
+    sourceHandle (tempFileHandle tmpFile) .|
+    streamUpload (Just (100 * 2 ^ (20 :: Int))) cmu) (void . pure)
+#else
   runLoggingAWS_ $
     void $
     concurrentUpload
       (Just (8 * 1024 ^ (2 :: Int)))
       (Just 10)
-      (FP tempFilePath)
+      (FP (tempFilePath tmpFile))
       cmu
+#endif
   endTime <- liftIO getCurrentTime
   reportSpeed cSize $ diffUTCTime endTime startTime
   logAWS LevelInfo "Finished uploading. Files are cached on S3."
