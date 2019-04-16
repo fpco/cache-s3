@@ -39,7 +39,7 @@ import qualified Paths_cache_s3 as Paths
 import Prelude as P
 import System.Exit
 import System.Log.FastLogger (fromLogStr)
-
+import UnliftIO.Temporary
 
 showLogLevel :: L.LogLevel -> LogStr
 showLogLevel level =
@@ -89,7 +89,10 @@ saveCache isPublic hAlgTxt comp dirs relativeDirs conf = do
         T.intercalate ", " sup
   run
     (withHashAlgorithm_ hAlgTxt hashNoSupport $ \hAlg ->
-       getCacheHandle dirs relativeDirs hAlg comp >>= (void . runMaybeT . uploadCache isPublic))
+       withSystemTempFile (makeTempFileNamePattern comp) $ \fp hdl ->
+         let tmpFile = TempFile fp hdl comp
+          in writeCacheTempFile dirs relativeDirs hAlg tmpFile >>=
+             (void . runMaybeT . uploadCache isPublic tmpFile))
     conf
 
 

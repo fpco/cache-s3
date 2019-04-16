@@ -18,10 +18,9 @@
 module Network.AWS.S3.Cache.Types where
 
 import Control.Applicative
-import Control.Lens
-import Data.Functor (($>))
+import Control.Lens hiding ((<.>))
 import Control.Monad.Logger as L
-import Control.Monad.Trans.Resource (MonadResource, ReleaseKey)
+import Control.Monad.Trans.Resource (MonadResource)
 import Crypto.Hash
 import Data.Attoparsec.ByteString.Char8
 import Data.ByteString (ByteString)
@@ -29,6 +28,7 @@ import Data.ByteString.Char8 as S8
 import Data.Char as C (toLower)
 import Data.Conduit (Conduit)
 import Data.Conduit.Zlib
+import Data.Functor (($>))
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Monoid ((<>))
 import Data.Text as T
@@ -39,6 +39,7 @@ import Network.AWS.Env
 import Network.AWS.S3.Types
 import Prelude as P
 import System.IO (Handle)
+import System.FilePath
 
 #if !WINDOWS
 import qualified Data.Conduit.LZ4 as LZ4
@@ -144,10 +145,13 @@ data Action
 
 
 data TempFile = TempFile
-  { tempFilePath       :: !FilePath
-  , tempFileReleaseKey :: !ReleaseKey
-  , tempFileHandle     :: !Handle
+  { tempFilePath        :: !FilePath
+  , tempFileHandle      :: !Handle
+  , tempFileCompression :: !Compression
   }
+
+makeTempFileNamePattern :: Compression -> FilePath
+makeTempFileNamePattern compression = "cache-s3.tar" <.> T.unpack (getCompressionName compression)
 
 ----------------
 --- Time -------
