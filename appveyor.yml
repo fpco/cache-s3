@@ -10,7 +10,6 @@ environment:
     STACK_WORK: '.w'
     WORK_DIR: 'c:\w'
 
-
 before_test:
 # Avoid long paths not to reach MAX_PATH of 260 chars
 - xcopy /q /s /e /r /k /i /v /h /y "%APPVEYOR_BUILD_FOLDER%" "%WORK_DIR%"
@@ -31,6 +30,7 @@ before_test:
         Expand-Archive cache-s3.zip -Destination .
         .\cache-s3 --prefix=$env:APPVEYOR_REPO_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows restore stack --base-branch=master
         .\cache-s3 --prefix=$env:APPVEYOR_REPO_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows restore stack work --base-branch=master
+        rm cache-s3.exe
       }
     }
 
@@ -42,6 +42,8 @@ test_script:
 
 
 after_test:
+- ps: >-
+    cache-s3 --version
 - ps: >-
     stack --no-terminal exec -- cache-s3 --version
 - ps: >-
@@ -60,6 +62,10 @@ after_test:
       7z a cache-s3.zip cache-s3.exe
       .\github-release upload --token=$env:GITHUB_TOKEN --repo=$env:APPVEYOR_REPO_NAME --file=cache-s3.zip --tag=$env:APPVEYOR_REPO_TAG_NAME --name=cache-s3-$env:APPVEYOR_REPO_TAG_NAME-windows-x86_64.zip
     }
+
+# on_finish:
+#   - ps: $blockRdp = $true; iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
+
 notifications:
   - provider: Email
     to:
