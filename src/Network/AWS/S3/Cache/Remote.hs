@@ -49,6 +49,12 @@ import Network.HTTP.Types.Status (Status(statusMessage), status404)
 import Prelude as P
 import System.IO (hClose)
 
+-- | Returns the time when the cache object was updated.
+getCreateTime :: GetObjectResponse -> Maybe UTCTime
+getCreateTime resp =
+  (resp ^. gorsLastModified) <|>
+  (HM.lookup metaCreateTimeKey (resp ^. gorsMetadata) >>= parseISO8601)
+
 -- | Will check if there is already cache up on AWS and checks if it's contents has changed.
 -- Returns create time date if new cache should be uploaded.
 hasCacheChanged ::
@@ -76,9 +82,7 @@ hasCacheChanged newHash = do
       onSucc resp = do
         logAWS LevelDebug "Discovered previous cache."
         let mOldHash = HM.lookup hashKey (resp ^. gorsMetadata)
-            mCreateTime =
-              (HM.lookup metaCreateTimeKey (resp ^. gorsMetadata) >>= parseISO8601) <|>
-              (resp ^. gorsLastModified)
+            mCreateTime = getCreateTime resp
         case mOldHash of
           Just oldHash ->
             logAWS LevelDebug $ "Hash value for previous cache is " <> hashKey <> ": " <> oldHash
@@ -243,11 +247,7 @@ downloadCache sink = do
       HM.lookup hashAlgName (resp ^. gorsMetadata) `onNothing`
       logAWS LevelWarn ("Cache is missing a hash value '" <> hashAlgName <> "'")
     logAWS LevelDebug $ "Hash value is " <> hashAlgName <> ": " <> hashTxt
-    let mCreateTime = do
-          createTimeTxt <- HM.lookup metaCreateTimeKey (resp ^. gorsMetadata)
-          parseISO8601 createTimeTxt
-    createTime <-
-      (mCreateTime <|> (resp ^. gorsLastModified)) `onNothing`
+    createTime <- getCreateTime resp `onNothing`
       logAWS LevelWarn "Cache is missing creation time info."
     logAWS LevelDebug $ "Cache creation timestamp:  " <> formatRFC822 createTime
     case c ^. maxAge of
