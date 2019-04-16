@@ -44,6 +44,7 @@ test_script:
 after_test:
 - ps: >-
     stack --no-terminal exec -- cache-s3 --version
+- ps: >-
     if ( -not $env:APPVEYOR_PULL_REQUEST_NUMBER ) {
       if ( $env:APPVEYOR_REPO_BRANCH -eq "master" ) {
         stack exec -- cache-s3 --prefix=$env:APPVEYOR_REPO_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows save stack
