@@ -1,3 +1,8 @@
+# v0.1.9
+
+* Switch to `unliftio` for temporary file creation, fix cache uploading on Windows: [#23](https://github.com/fpco/cache-s3/issues/23)
+* Fix printing of cache creation time [#22](https://github.com/fpco/cache-s3/pull/22)
+
 # v0.1.8
 
 * Addition of `--overwrite` flag that emmits log messages whenever a file is about to be replaced

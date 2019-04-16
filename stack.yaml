@@ -7,7 +7,6 @@ extra-deps:
 - amazonka-s3-1.4.5
 - amazonka-s3-streaming-0.2.0.3
 - conduit-extra-1.1.17
-- temporary-resourcet-0.1.0.0
 - tar-conduit-0.2.3.1
 - lz4-conduit-0.2
 - directory-1.3.2.0

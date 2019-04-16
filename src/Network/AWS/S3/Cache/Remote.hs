@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -20,7 +21,7 @@ import Control.Lens
 import Control.Monad.Logger as L
 import Control.Monad.Reader
 import Control.Monad.Trans.Maybe
-import Control.Monad.Trans.Resource (MonadResource, ResourceT, release)
+import Control.Monad.Trans.Resource (MonadResource, ResourceT)
 import Crypto.Hash (Digest, HashAlgorithm, digestFromByteString)
 import Data.ByteArray as BA
 import Data.ByteString as S
@@ -127,9 +128,11 @@ uploadCache ::
      , HashAlgorithm h
      , Typeable h
      )
-  => Bool -> (TempFile, Word64, Digest h, Compression)
+  => Bool
+  -> TempFile -- ^ Temporary file where cache has been written to
+  -> (Word64, Digest h) -- ^ Size and hash of the temporary file with cache
   -> MaybeT m ()
-uploadCache isPublic (tmp, cSize, newHash, comp) = do
+uploadCache isPublic tmpFile (cSize, newHash) = do
   c <- ask
   when (maybe False (fromIntegral cSize >=) (c ^. maxSize)) $ do
     logAWS LevelInfo $
@@ -145,7 +148,7 @@ uploadCache isPublic (tmp, cSize, newHash, comp) = do
           [ (metaHashAlgorithmKey, hashKey)
           , (metaCreateTimeKey, formatISO8601 createTime)
           , (hashKey, newHashTxt)
-          , (compressionMetaKey, getCompressionName comp)
+          , (compressionMetaKey, getCompressionName (tempFileCompression tmpFile))
           ] &
         if isPublic
           then cmuACL ?~ OPublicRead
@@ -154,16 +157,15 @@ uploadCache isPublic (tmp, cSize, newHash, comp) = do
     "Data change detected, caching " <> formatBytes (fromIntegral cSize) <> " with " <> hashKey <>
     ": " <>
     newHashTxt
-  liftIO $ hClose (tempFileHandle tmp)
   startTime <- liftIO getCurrentTime
+  liftIO $ hClose (tempFileHandle tmpFile)
   runLoggingAWS_ $
     void $
     concurrentUpload
       (Just (8 * 1024 ^ (2 :: Int)))
       (Just 10)
-      (FP (tempFilePath tmp))
+      (FP (tempFilePath tmpFile))
       cmu
-  release (tempFileReleaseKey tmp)
   endTime <- liftIO getCurrentTime
   reportSpeed cSize $ diffUTCTime endTime startTime
   logAWS LevelInfo "Finished uploading. Files are cached on S3."

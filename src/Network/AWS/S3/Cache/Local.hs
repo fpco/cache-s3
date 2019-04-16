@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -37,7 +38,7 @@ import Prelude as P
 import System.Directory
 import System.FilePath
 import System.IO hiding (openTempFile)
-import System.IO.Temp
+
 
 tarFiles :: (MonadCatch m, MonadResource m, MonadLogger m) =>
             [FilePath] -> [FilePath] -> ConduitM a ByteString m ()
@@ -74,37 +75,37 @@ removeSubpaths dirsCanonical =
     isPathPrefixOf _ []          = False
     isPathPrefixOf (x:xs) (y:ys) = equalFilePath x y && isPathPrefixOf xs ys
 
+
 prepareCache ::
      (HashAlgorithm h, MonadResource m)
-  => Compression -> ConduitM ByteString Void m (TempFile, Word64, Digest h, Compression)
-prepareCache compression = do
-  (releaseKey, fileName, tmpHandle) <-
-    openTempFile Nothing ("cache-s3.tar" <.> T.unpack (getCompressionName compression))
+  => TempFile -> ConduitM ByteString Void m (Word64, Digest h)
+prepareCache TempFile {tempFileHandle, tempFileCompression} = do
   hash <-
     getZipSink
-      (ZipSink (getCompressionConduit compression .| sinkHandle tmpHandle) *>
+      (ZipSink (getCompressionConduit tempFileCompression .| sinkHandle tempFileHandle) *>
        ZipSink sinkHash)
   cSize <-
     liftIO $ do
-      hFlush tmpHandle
-      cSize <- hTell tmpHandle
-      hSeek tmpHandle AbsoluteSeek 0
+      hFlush tempFileHandle
+      cSize <- hTell tempFileHandle
+      hSeek tempFileHandle AbsoluteSeek 0
       return cSize
-  let tmpFile = TempFile fileName releaseKey tmpHandle
-  return (tmpFile, fromInteger cSize, hash, compression)
+  return (fromInteger cSize, hash)
 
 
--- | Create a compressed tarball in the temporary directory. Compute the hash value of the tarball
+-- | Create a compressed tarball and write it into a handle. Compute the hash value of the tarball
 -- prior to the compression, in order to avoid any possible nondeterminism with future compression
--- algorithms. Returns the computed hash and the file handle where tarball can be read from.
-getCacheHandle ::
+-- algorithms. Returns the computed hash. File handle is set to the beginning of the file so the
+-- tarball can be read from.
+writeCacheTempFile ::
      (HashAlgorithm h, MonadCatch m, MonadResource m, MonadLogger m)
   => [FilePath]
   -> [FilePath]
   -> h
-  -> Compression
-  -> m (TempFile, Word64, Digest h, Compression)
-getCacheHandle dirs relativeDirs _ comp = runConduit $ tarFiles dirs relativeDirs .| prepareCache comp
+  -> TempFile
+  -> m (Word64, Digest h)
+writeCacheTempFile dirs relativeDirs _ tmpFile =
+  runConduit $ tarFiles dirs relativeDirs .| prepareCache tmpFile
 
 
 -- | Restores all of the files from the tarball and computes the hash at the same time.
