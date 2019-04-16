@@ -80,8 +80,6 @@ prepareCache ::
      (HashAlgorithm h, MonadResource m)
   => TempFile -> ConduitM ByteString Void m (Word64, Digest h)
 prepareCache TempFile {tempFileHandle, tempFileCompression} = do
-  -- (releaseKey, fileName, tmpHandle) <-
-  --   openTempFile Nothing ("cache-s3.tar" <.> T.unpack (getCompressionName compression))
   hash <-
     getZipSink
       (ZipSink (getCompressionConduit tempFileCompression .| sinkHandle tempFileHandle) *>

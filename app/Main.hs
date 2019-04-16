@@ -60,7 +60,7 @@ commonArgsParser version mS3Bucket =
     (long "bucket" <> short 'b' <> metavar "S3_BUCKET" <> maybe mempty value mS3Bucket <>
      help
        "Name of the S3 bucket that will be used for caching of local files. \
-            \If S3_BUCKET environment variable is not set, this argument is required.") <*>
+       \If S3_BUCKET environment variable is not set, this argument is required.") <*>
   option
     (Just <$> readRegion)
     (long "region" <> short 'r' <> value Nothing <> metavar "AWS_REGION" <>

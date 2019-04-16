@@ -24,12 +24,14 @@ before_test:
 - cp stack.exe %APPDATA%\local\bin\stack.exe
 
 - ps: >-
-    if (-not ("$env:CACHE_S3_VERSION" -eq "" )) {
-      [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-      Invoke-WebRequest https://github.com/fpco/cache-s3/releases/download/$env:CACHE_S3_VERSION/cache-s3-$env:CACHE_S3_VERSION-windows-x86_64.zip -OutFile cache-s3.zip
-      Expand-Archive cache-s3.zip -Destination .
-      .\cache-s3 --prefix=$env:APPVEYOR_REPO_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows restore stack --base-branch=master
-      .\cache-s3 --prefix=$env:APPVEYOR_REPO_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows restore stack work --base-branch=master
+    if ( -not $env:APPVEYOR_PULL_REQUEST_NUMBER ) {
+      if (-not ("$env:CACHE_S3_VERSION" -eq "" )) {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Invoke-WebRequest https://github.com/fpco/cache-s3/releases/download/$env:CACHE_S3_VERSION/cache-s3-$env:CACHE_S3_VERSION-windows-x86_64.zip -OutFile cache-s3.zip
+        Expand-Archive cache-s3.zip -Destination .
+        .\cache-s3 --prefix=$env:APPVEYOR_REPO_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows restore stack --base-branch=master
+        .\cache-s3 --prefix=$env:APPVEYOR_REPO_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows restore stack work --base-branch=master
+      }
     }
 
 
@@ -41,6 +43,7 @@ test_script:
 
 after_test:
 - ps: >-
+    stack exec -- cache-s3 --version
     if ( -not $env:APPVEYOR_PULL_REQUEST_NUMBER ) {
       if ( $env:APPVEYOR_REPO_BRANCH -eq "master" ) {
         stack exec -- cache-s3 --prefix=$env:APPVEYOR_REPO_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows save stack

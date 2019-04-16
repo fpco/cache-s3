@@ -31,17 +31,19 @@ before_install:
   else
     travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
   fi
-  if [ -n "$CACHE_S3_VERSION" ]; then
-    travis_retry curl -f -L https://github.com/fpco/cache-s3/releases/download/$CACHE_S3_VERSION/cache-s3-$CACHE_S3_VERSION-$TRAVIS_OS_NAME-x86_64.tar.gz | tar xz -C ~/.local/bin 'cache-s3'
-    if [ -x $(readlink -f "~/.local/bin/cache-s3") ]; then
-      cache-s3 --prefix=$TRAVIS_REPO_SLUG \
-               --git-branch="$TRAVIS_BRANCH" \
-               --suffix="$TRAVIS_OS_NAME" \
-               restore stack --base-branch=master
-      cache-s3 --prefix=$TRAVIS_REPO_SLUG \
-               --git-branch="$TRAVIS_BRANCH" \
-               --suffix="$TRAVIS_OS_NAME" \
-               restore stack work --base-branch=master
+  if [ "$TRAVIS_PULL_REQUEST" = false ]; then
+    if [ -n "$CACHE_S3_VERSION" ]; then
+      travis_retry curl -f -L https://github.com/fpco/cache-s3/releases/download/$CACHE_S3_VERSION/cache-s3-$CACHE_S3_VERSION-$TRAVIS_OS_NAME-x86_64.tar.gz | tar xz -C ~/.local/bin 'cache-s3'
+      if [ -x $(readlink -f "~/.local/bin/cache-s3") ]; then
+        cache-s3 --prefix=$TRAVIS_REPO_SLUG \
+                 --git-branch="$TRAVIS_BRANCH" \
+                 --suffix="$TRAVIS_OS_NAME" \
+                 restore stack --base-branch=master
+        cache-s3 --prefix=$TRAVIS_REPO_SLUG \
+                 --git-branch="$TRAVIS_BRANCH" \
+                 --suffix="$TRAVIS_OS_NAME" \
+                 restore stack work --base-branch=master
+      fi
     fi
   fi
 
@@ -63,7 +65,9 @@ script:
   set +ex
 
 after_success:
-- | # Do not cache PRs
+- |
+  stack --no-terminal exec -- cache-s3 --version
+  # Do not cache PRs
   if [ "$TRAVIS_PULL_REQUEST" = false ]; then
     if [ "$TRAVIS_BRANCH" = master ]; then
       stack --no-terminal exec -- cache-s3 --prefix=$TRAVIS_REPO_SLUG \
