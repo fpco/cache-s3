@@ -49,6 +49,7 @@ import Network.AWS.S3.StreamingUpload
 import Network.AWS.S3.Types
 import Network.HTTP.Types.Status (Status(statusMessage), status404)
 import Prelude as P
+import System.IO (hClose)
 
 -- | Returns the time when the cache object was created
 getCreateTime :: GetObjectResponse -> Maybe UTCTime
@@ -158,12 +159,13 @@ uploadCache isPublic tmpFile (cSize, newHash) = do
     ": " <>
     newHashTxt
   startTime <- liftIO getCurrentTime
-#if WINDOWS
-  runLoggingAWS_ $
-    runConduit $
-    sourceHandle (tempFileHandle tmpFile) .|
-    streamUpload (Just (100 * 2 ^ (20 :: Int))) cmu) (void . pure)
-#else
+-- #if WINDOWS
+--   runLoggingAWS_ $
+--     runConduit $
+--     sourceHandle (tempFileHandle tmpFile) .|
+--     streamUpload (Just (100 * 2 ^ (20 :: Int))) cmu) (void . pure)
+-- #else
+  liftIO $ hClose (tempFileHandle tmpFile)
   runLoggingAWS_ $
     void $
     concurrentUpload
@@ -171,7 +173,7 @@ uploadCache isPublic tmpFile (cSize, newHash) = do
       (Just 10)
       (FP (tempFilePath tmpFile))
       cmu
-#endif
+-- #endif
   endTime <- liftIO getCurrentTime
   reportSpeed cSize $ diffUTCTime endTime startTime
   logAWS LevelInfo "Finished uploading. Files are cached on S3."
