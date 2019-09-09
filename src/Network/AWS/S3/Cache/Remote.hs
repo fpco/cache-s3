@@ -46,6 +46,7 @@ import Network.AWS.S3.DeleteObject
 import Network.AWS.S3.GetObject
 import Network.AWS.S3.StreamingUpload
 import Network.AWS.S3.Types
+import Network.HTTP.Client
 import Network.HTTP.Types.Status (Status(statusMessage), status404)
 import Prelude as P
 import System.IO (hClose)
@@ -385,7 +386,18 @@ runLoggingAWS action onErr onSucc = do
         case err of
           TransportError exc -> do
             unless ((conf ^. minLogLevel) == L.LevelDebug) $
-              logAWS LevelError "Critical HTTPException"
+              let errMsg =
+                    case exc of
+                      HttpExceptionRequest _ (StatusCodeException resp _) ->
+                        "StatusCodeException: " <> T.pack (show (responseStatus resp))
+                      HttpExceptionRequest _ (TooManyRedirects rs) ->
+                        "TooManyRedirects: " <> T.pack (show (P.length rs))
+                      HttpExceptionRequest _ (InvalidHeader _) -> "InvalidHeader"
+                      HttpExceptionRequest _ (InvalidRequestHeader _) -> "InvalidRequestHeader"
+                      HttpExceptionRequest _ (InvalidProxyEnvironmentVariable name _) ->
+                        "InvalidProxyEnvironmentVariable: " <> name
+                      _ -> T.pack (displayException exc)
+               in logAWS LevelError $ "Critical HTTPException: " <> errMsg
             throwM exc
           SerializeError serr -> return (T.pack (serr ^. serializeMessage), serr ^. serializeStatus)
           ServiceError serr -> do
@@ -399,7 +411,7 @@ runLoggingAWS action onErr onSucc = do
       (mLevel, def) <- onErr status
       case mLevel of
         Just level -> logAWS level errMsg
-        Nothing    -> return ()
+        Nothing -> return ()
       return def
     Right suc -> onSucc suc
 

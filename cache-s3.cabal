@@ -37,10 +37,10 @@ library
                      , cryptonite
                      , cryptonite-conduit
                      , directory >= 1.3.0.0
-                     , safe-exceptions
                      , fast-logger >= 2.1.0
                      , filepath
                      , git
+                     , http-client
                      , http-types
                      , lens
                      , memory
@@ -49,12 +49,13 @@ library
                      , mtl
                      , process
                      , resourcet
+                     , safe-exceptions
                      , tar-conduit >= 0.2.0
                      , text
                      , time
                      , transformers >= 0.5.2.0
-                     , unordered-containers
                      , unliftio
+                     , unordered-containers
                      , vector >= 0.12.0.0
                      , yaml
   default-language:    Haskell2010
