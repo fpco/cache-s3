@@ -1,13 +1,11 @@
-resolver: lts-10.10
+resolver: lts-14.4
 packages:
 - .
 extra-deps:
-- amazonka-1.4.5
-- amazonka-core-1.4.5
-- amazonka-s3-1.4.5
-- amazonka-s3-streaming-0.2.0.3
-- conduit-extra-1.1.17
-- tar-conduit-0.2.3.1
-- lz4-conduit-0.2
-- directory-1.3.2.0
-- http-client-0.5.7.1
+- amazonka-1.6.1@sha256:b2a50a6b87908efa1e1793868495e9b252cbcf99e2d7036b21f9fe1e12dc413d,3420
+- amazonka-core-1.6.1@sha256:ad6b06eb5b6847cbfbe4201e78b3fdb7818a42da061c5d0f8af4fdf2494e44b5,4957
+- amazonka-s3-1.6.1@sha256:9d07240fca59ad5197fb614ce3051e701e4951e6d4625a2dab4a9c17a1900194,6317
+- amazonka-s3-streaming-1.0.0.2@sha256:7e2ed4aed4f1bd59092593c1fa4b2af31d3ed9f0fbf51b730ad1babe943a6f1c,2639
+- git-0.3.0@sha256:dc070840ab24792c9664b9e3e69c9d55d30fc36fee41049c548bb0e8ec83c919,3448
+- lz4-conduit-0.3@sha256:1e962c6038ba2568a3d6b9a53cfdcd64ed326876012c44f1e65ed34e2aa9677d,1657
+- http-client-0.5.14@sha256:4880b27d6741e331454a1d4c887d96ce3d7d625322c8433983a4b1cd08538577,5348

@@ -19,14 +19,15 @@ module Network.AWS.S3.Cache.Types where
 
 import Control.Applicative
 import Control.Lens hiding ((<.>))
+import Control.Exception.Safe (MonadThrow)
 import Control.Monad.Logger as L
+import Conduit (PrimMonad, ConduitT)
 import Control.Monad.Trans.Resource (MonadResource)
 import Crypto.Hash
 import Data.Attoparsec.ByteString.Char8
 import Data.ByteString (ByteString)
 import Data.ByteString.Char8 as S8
 import Data.Char as C (toLower)
-import Data.Conduit (Conduit)
 import Data.Conduit.Zlib
 import Data.Functor (($>))
 import Data.Maybe (fromMaybe, listToMaybe)
@@ -38,8 +39,8 @@ import Data.Typeable
 import Network.AWS.Env
 import Network.AWS.S3.Types
 import Prelude as P
-import System.IO (Handle)
 import System.FilePath
+import System.IO (Handle)
 
 #if !WINDOWS
 import qualified Data.Conduit.LZ4 as LZ4
@@ -370,16 +371,16 @@ data Compression
   deriving (Show, Eq, Enum)
 
 
-getCompressionConduit :: MonadResource m =>
-                         Compression -> Conduit ByteString m ByteString
+getCompressionConduit :: (MonadResource m, MonadThrow m, PrimMonad m) =>
+                         Compression -> ConduitT ByteString ByteString m ()
 getCompressionConduit GZip = gzip
 #if !WINDOWS
 getCompressionConduit LZ4  = LZ4.compress Nothing
 #endif
 
 
-getDeCompressionConduit :: MonadResource m =>
-                           Compression -> Conduit ByteString m ByteString
+getDeCompressionConduit :: (MonadResource m, MonadThrow m, PrimMonad m) =>
+                           Compression -> ConduitT ByteString ByteString m ()
 getDeCompressionConduit GZip = ungzip
 #if !WINDOWS
 getDeCompressionConduit LZ4  = LZ4.decompress

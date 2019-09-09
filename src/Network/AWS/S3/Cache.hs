@@ -23,7 +23,6 @@ import Control.Monad (when)
 import Control.Monad.Logger as L
 import Control.Monad.Reader
 import Control.Monad.Trans.AWS
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Resource (ResourceT)
 import Data.ByteString.Char8 as S8
@@ -39,7 +38,7 @@ import qualified Paths_cache_s3 as Paths
 import Prelude as P
 import System.Exit
 import System.Log.FastLogger (fromLogStr)
-import UnliftIO.Temporary
+import UnliftIO
 
 showLogLevel :: L.LogLevel -> LogStr
 showLogLevel level =
@@ -72,9 +71,9 @@ customLoggerT con minLevel (LoggingT f) = do
 
 -- | Run the cache action.
 run ::
-     (MonadBaseControl IO m, MonadIO m)
-  => ReaderT Config (LoggingT (ResourceT m)) a
-  -> Config
+     (MonadUnliftIO m, HasIsConcise r Bool, HasMinLogLevel r L.LogLevel)
+  => ReaderT r (LoggingT (ResourceT m)) a
+  -> r
   -> m a
 run action conf =
   runResourceT $
@@ -91,8 +90,10 @@ saveCache isPublic hAlgTxt comp dirs relativeDirs conf = do
     (withHashAlgorithm_ hAlgTxt hashNoSupport $ \hAlg ->
        withSystemTempFile (makeTempFileNamePattern comp) $ \fp hdl ->
          let tmpFile = TempFile fp hdl comp
-          in writeCacheTempFile dirs relativeDirs hAlg tmpFile >>=
-             (void . runMaybeT . uploadCache isPublic tmpFile))
+          in do
+           logger <- getLoggerIO
+           sizeAndHash <- liftIO $ runResourceT $ writeCacheTempFile logger dirs relativeDirs hAlg tmpFile
+           void $ runMaybeT $ uploadCache isPublic tmpFile sizeAndHash)
     conf
 
 

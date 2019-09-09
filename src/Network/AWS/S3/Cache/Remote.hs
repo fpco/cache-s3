@@ -62,6 +62,7 @@ hasCacheChanged ::
      ( MonadReader r m
      , MonadResource m
      , MonadLogger m
+     , MonadThrow m
      , HasBucketName r BucketName
      , HasObjectKey r ObjectKey
      , HasEnv r
@@ -125,6 +126,7 @@ uploadCache ::
      , HasMaxSize r (Maybe Integer)
      , MonadResource m
      , MonadLoggerIO m
+     , MonadThrow m
      , HashAlgorithm h
      , Typeable h
      )
@@ -196,6 +198,7 @@ deleteCache ::
      ( MonadResource m
      , MonadLoggerIO m
      , MonadReader c m
+     , MonadThrow m
      , HasEnv c
      , HasMinLogLevel c L.LogLevel
      , HasObjectKey c ObjectKey
@@ -213,6 +216,7 @@ downloadCache ::
      ( MonadResource m
      , MonadLoggerIO m
      , MonadReader c m
+     , MonadThrow m
      , HasEnv c
      , HasMinLogLevel c L.LogLevel
      , HasObjectKey c ObjectKey
@@ -221,7 +225,10 @@ downloadCache ::
      , HasMaxSize c (Maybe Integer)
      )
   => (forall h . HashAlgorithm h =>
-       (L.LogLevel -> Text -> IO ()) -> Compression -> h -> Sink S.ByteString (ResourceT IO) (Digest h))
+       (L.LogLevel -> Text -> IO ())
+       -> Compression
+       -> h
+       -> ConduitT S.ByteString Void (ResourceT IO) (Digest h))
   -> MaybeT m ()
 downloadCache sink = do
   c <- ask
@@ -286,9 +293,9 @@ downloadCache sink = do
       logger <- getLoggerIO
       hashComputed <-
         liftIO $
-        runResourceT $
-        resp ^. gorsBody ^. to _streamBody $$+-
-        getProgressReporter (logger LevelInfo) (fromInteger len) .| sink logger compAlg hashAlg
+        runConduitRes (
+        (resp ^. gorsBody ^. to _streamBody) .|
+        getProgressReporter (logger LevelInfo) (fromInteger len) .| sink logger compAlg hashAlg)
       if hashComputed == hashExpected
         then
           logAWS LevelInfo $
@@ -313,6 +320,7 @@ sendAWS ::
      , HasObjectKey r ObjectKey
      , AWSRequest a
      , MonadLogger m
+     , MonadThrow m
      )
   => a
   -> (Status -> m (Maybe L.LogLevel, b))
@@ -331,6 +339,7 @@ sendAWS_ ::
      , HasObjectKey r ObjectKey
      , AWSRequest a
      , MonadLogger m
+     , MonadThrow m
      )
   => a
   -> (Rs a -> m ())
@@ -346,6 +355,7 @@ runLoggingAWS_ ::
      , HasMinLogLevel r L.LogLevel
      , HasObjectKey r ObjectKey
      , MonadLogger m
+     , MonadThrow m
      )
   => AWS ()
   -> m ()
@@ -360,6 +370,7 @@ runLoggingAWS ::
      , HasMinLogLevel r L.LogLevel
      , HasObjectKey r ObjectKey
      , MonadLogger m
+     , MonadThrow m
      )
   => AWS t
   -> (Status -> m (Maybe L.LogLevel, b))

@@ -15,6 +15,7 @@
 
 module Network.AWS.S3.Cache.Local where
 
+import Conduit (PrimMonad)
 import Control.Exception.Safe (MonadCatch, MonadThrow, throwString)
 import Control.Monad (void, when)
 import Control.Monad.IO.Class (MonadIO(liftIO))
@@ -31,7 +32,6 @@ import Data.List as L
 import Data.Maybe as Maybe
 import Data.Monoid ((<>))
 import Data.Text as T
-import Data.Void
 import Data.Word
 import Network.AWS.S3.Cache.Types
 import Prelude as P
@@ -40,24 +40,28 @@ import System.FilePath
 import System.IO hiding (openTempFile)
 
 
-tarFiles :: (MonadCatch m, MonadResource m, MonadLogger m) =>
-            [FilePath] -> [FilePath] -> ConduitM a ByteString m ()
-tarFiles dirs relativeDirs = do
-  logDebugN "Preparing files for saving in the cache."
+tarFiles ::
+     (MonadCatch m, MonadResource m, MonadIO m)
+  => (LogLevel -> Text -> IO ())
+  -> [FilePath]
+  -> [FilePath]
+  -> ConduitM a ByteString m ()
+tarFiles logger dirs relativeDirs = do
+  liftIO $ logger LevelDebug "Preparing files for saving in the cache."
   dirsCanonical <- liftIO $ P.mapM canonicalizePath dirs
   uniqueDirs <- Maybe.catMaybes <$> P.mapM skipMissing (removeSubpaths dirsCanonical ++ relativeDirs)
   if P.null uniqueDirs
-    then logErrorN "No paths to cache has been specified."
+    then liftIO $ logger LevelError "No paths to cache has been specified."
     else sourceList uniqueDirs .| filePathConduit .| void tar
   where
     skipMissing fp = do
       exist <- liftIO $ doesPathExist fp
       if exist
         then do
-          logInfoN $ "Caching: " <> T.pack fp
+          liftIO $ logger LevelInfo $ "Caching: " <> T.pack fp
           return $ Just fp
         else do
-          logWarnN $ "File path is skipped since it is missing: " <> T.pack fp
+          liftIO $ logger LevelWarn $ "File path is skipped since it is missing: " <> T.pack fp
           return Nothing
 
 
@@ -77,7 +81,7 @@ removeSubpaths dirsCanonical =
 
 
 prepareCache ::
-     (HashAlgorithm h, MonadResource m)
+     (HashAlgorithm h, MonadResource m, PrimMonad m, MonadThrow m)
   => TempFile -> ConduitM ByteString Void m (Word64, Digest h)
 prepareCache TempFile {tempFileHandle, tempFileCompression} = do
   hash <-
@@ -98,19 +102,21 @@ prepareCache TempFile {tempFileHandle, tempFileCompression} = do
 -- algorithms. Returns the computed hash. File handle is set to the beginning of the file so the
 -- tarball can be read from.
 writeCacheTempFile ::
-     (HashAlgorithm h, MonadCatch m, MonadResource m, MonadLogger m)
-  => [FilePath]
+     (HashAlgorithm h, MonadCatch m, MonadResource m, PrimMonad m, MonadThrow m)
+  =>
+     (LogLevel -> Text -> IO ())
+  -> [FilePath]
   -> [FilePath]
   -> h
   -> TempFile
   -> m (Word64, Digest h)
-writeCacheTempFile dirs relativeDirs _ tmpFile =
-  runConduit $ tarFiles dirs relativeDirs .| prepareCache tmpFile
+writeCacheTempFile logger dirs relativeDirs _ tmpFile =
+  runConduit $ tarFiles logger dirs relativeDirs .| prepareCache tmpFile
 
 
 -- | Restores all of the files from the tarball and computes the hash at the same time.
 restoreFilesFromCache ::
-     (MonadIO m, MonadThrow m, MonadResource m, HashAlgorithm h)
+     (MonadIO m, MonadThrow m, MonadResource m, PrimMonad m, HashAlgorithm h)
   => FileOverwrite
   -> (LogLevel -> Text -> IO ())
   -> Compression -- ^ Compression algorithm the stream is expected to be compressed with.
