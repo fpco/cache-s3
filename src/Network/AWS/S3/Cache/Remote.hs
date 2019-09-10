@@ -67,6 +67,7 @@ hasCacheChanged ::
      , MonadThrow m
      , HasBucketName r BucketName
      , HasObjectKey r ObjectKey
+     , HasNumRetries r Int
      , HasEnv r
      , HasMinLogLevel r L.LogLevel
      , HashAlgorithm h
@@ -126,6 +127,7 @@ uploadCache ::
      , HasObjectKey r ObjectKey
      , HasBucketName r BucketName
      , HasMaxSize r (Maybe Integer)
+     , HasNumRetries r Int
      , MonadResource m
      , MonadLoggerIO m
      , MonadThrow m
@@ -203,6 +205,7 @@ deleteCache ::
      , MonadThrow m
      , HasEnv c
      , HasMinLogLevel c L.LogLevel
+     , HasNumRetries c Int
      , HasObjectKey c ObjectKey
      , HasBucketName c BucketName
      )
@@ -225,6 +228,7 @@ downloadCache ::
      , HasBucketName c BucketName
      , HasMaxAge c (Maybe NominalDiffTime)
      , HasMaxSize c (Maybe Integer)
+     , HasNumRetries c Int
      )
   => (forall h . HashAlgorithm h =>
        (L.LogLevel -> Text -> IO ())
@@ -320,6 +324,7 @@ sendAWS ::
      , HasEnv r
      , HasMinLogLevel r L.LogLevel
      , HasObjectKey r ObjectKey
+     , HasNumRetries r Int
      , AWSRequest a
      , MonadLogger m
      , MonadThrow m
@@ -338,6 +343,7 @@ sendAWS_ ::
      , MonadResource m
      , HasEnv r
      , HasMinLogLevel r L.LogLevel
+     , HasNumRetries r Int
      , HasObjectKey r ObjectKey
      , AWSRequest a
      , MonadLogger m
@@ -355,6 +361,7 @@ runLoggingAWS_ ::
      , MonadResource m
      , HasEnv r
      , HasMinLogLevel r L.LogLevel
+     , HasNumRetries r Int
      , HasObjectKey r ObjectKey
      , MonadLogger m
      , MonadThrow m
@@ -370,6 +377,7 @@ runLoggingAWS ::
      , MonadResource m
      , HasEnv r
      , HasMinLogLevel r L.LogLevel
+     , HasNumRetries r Int
      , HasObjectKey r ObjectKey
      , MonadLogger m
      , MonadThrow m
@@ -380,7 +388,7 @@ runLoggingAWS ::
   -> m b
 runLoggingAWS action onErr onSucc = do
   conf <- ask
-  eResp <- runAWS conf $ trying _Error action
+  eResp <- retryWith (runAWS conf $ trying _Error action)
   case eResp of
     Left err -> do
       (errMsg, status) <-
