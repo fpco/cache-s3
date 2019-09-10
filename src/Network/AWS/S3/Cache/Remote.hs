@@ -16,6 +16,7 @@
 module Network.AWS.S3.Cache.Remote where
 
 import Control.Applicative
+import Control.Concurrent (threadDelay)
 import Control.Exception.Safe
 import Control.Lens
 import Control.Monad.Logger as L
@@ -386,21 +387,7 @@ runLoggingAWS action onErr onSucc = do
         case err of
           TransportError exc -> do
             unless ((conf ^. minLogLevel) == L.LevelDebug) $
-              let errMsg =
-                    case exc of
-                      HttpExceptionRequest _ httpExcContent ->
-                        case httpExcContent of
-                          StatusCodeException resp _ ->
-                            "StatusCodeException: " <> T.pack (show (responseStatus resp))
-                          TooManyRedirects rs ->
-                            "TooManyRedirects: " <> T.pack (show (P.length rs))
-                          InvalidHeader _ -> "InvalidHeader"
-                          InvalidRequestHeader _ -> "InvalidRequestHeader"
-                          InvalidProxyEnvironmentVariable name _ ->
-                            "InvalidProxyEnvironmentVariable: " <> name
-                          _ -> T.pack (show httpExcContent)
-                      _ -> T.pack (displayException exc)
-               in logAWS LevelError $ "Critical HTTPException: " <> errMsg
+                logAWS LevelError $ "Critical HTTPException: " <> toErrorMessage exc
             throwM exc
           SerializeError serr -> return (T.pack (serr ^. serializeMessage), serr ^. serializeStatus)
           ServiceError serr -> do
@@ -417,6 +404,51 @@ runLoggingAWS action onErr onSucc = do
         Nothing -> return ()
       return def
     Right suc -> onSucc suc
+
+tshow :: Show a => a -> Text
+tshow = T.pack . show
+
+-- | Convert an HTTP exception into a readable error message
+toErrorMessage :: HttpException -> Text
+toErrorMessage exc =
+  case exc of
+    HttpExceptionRequest _ httpExcContent ->
+      case httpExcContent of
+        StatusCodeException resp _ -> "StatusCodeException: " <> tshow (responseStatus resp)
+        TooManyRedirects rs -> "TooManyRedirects: " <> tshow (P.length rs)
+        InvalidHeader _ -> "InvalidHeader"
+        InvalidRequestHeader _ -> "InvalidRequestHeader"
+        InvalidProxyEnvironmentVariable name _ -> "InvalidProxyEnvironmentVariable: " <> name
+        _ -> tshow httpExcContent
+    _ -> T.pack (displayException exc)
+
+-- | Retry the provided action
+retryWith ::
+     ( HasNumRetries r Int
+     , HasObjectKey r ObjectKey
+     , MonadIO m
+     , MonadLogger m
+     , MonadReader r m
+     )
+  => m (Either Error a)
+  -> m (Either Error a)
+retryWith action = do
+  conf <- ask
+  let n = conf ^. numRetries
+      go i eResp =
+        case eResp of
+          Left (TransportError exc)
+            | i > n -> pure eResp
+            | otherwise -> do
+              let s = min 9 (i * i) -- exponential backoff with at most 9 seconds
+              logAWS LevelWarn $ "TransportError - " <> toErrorMessage exc
+              logAWS LevelWarn $
+                "Retry " <> tshow i <> "/" <> tshow n <> ". Waiting for " <> tshow s <> " seconds"
+              liftIO $ threadDelay (s * 1000000) -- microseconds
+              eResp' <- action
+              go (i + 1) eResp'
+          _ -> pure eResp
+  action >>= go 1
 
 -- | Logger that will add object info to the entry.
 logAWS :: (MonadReader a m, MonadLogger m, HasObjectKey a ObjectKey) =>
