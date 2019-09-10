@@ -54,6 +54,7 @@ data Config = Config
   , _isConcise   :: !Bool
   , _maxAge      :: !(Maybe NominalDiffTime)
   , _maxSize     :: !(Maybe Integer)
+  , _numRetries  :: !Int
   }
 
 makeLensesWith classUnderscoreNoPrefixFields ''Config
@@ -78,15 +79,16 @@ mkObjectKey mPrefix mBranchName mSuffix =
 
 
 data CommonArgs = CommonArgs
-  { commonBucket    :: !BucketName
-  , commonRegion    :: !(Maybe Region)
-  , commonPrefix    :: !(Maybe Text)
-  , commonGitDir    :: !(Maybe FilePath)
-  , commonGitBranch :: !(Maybe Text)
-  , commonSuffix    :: !(Maybe Text)
-  , commonVerbosity :: !L.LogLevel
-  , commonConcise   :: !Bool
-  , commonMaxBytes  :: !(Maybe Integer)
+  { commonBucket     :: !BucketName
+  , commonRegion     :: !(Maybe Region)
+  , commonPrefix     :: !(Maybe Text)
+  , commonGitDir     :: !(Maybe FilePath)
+  , commonGitBranch  :: !(Maybe Text)
+  , commonSuffix     :: !(Maybe Text)
+  , commonVerbosity  :: !L.LogLevel
+  , commonConcise    :: !Bool
+  , commonMaxBytes   :: !(Maybe Integer)
+  , commonNumRetries :: !Int
   } deriving (Show)
 
 
