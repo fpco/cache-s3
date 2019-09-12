@@ -111,7 +111,12 @@ commonArgsParser version mS3Bucket =
     (long "max-size" <> metavar "SIZE" <> value Nothing <>
      help
        "Maximum size of cache that will be acceptable for uploading/downloading to/from S3. \
-          \Examples: 5Gb, 750mb, etc. ") <*
+          \Examples: 5Gb, 750mb, etc. ") <*>
+  option
+    auto
+    (long "num-retries" <> metavar "N" <> value 3 <>
+     help
+       "Retry a failing data transfer at most N times. (Default is 3)") <*
   infoOption
     ("cache-s3-" <> showVersion version)
     (long "version" <> help "Print current verison of the program.")

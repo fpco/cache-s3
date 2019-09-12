@@ -108,7 +108,7 @@ mkConfig CommonArgs {..} = do
   let env = maybe envInit (\reg -> envInit & envRegion .~ reg) commonRegion
   mGitBranch <- maybe (liftIO $ getBranchName commonGitDir) (return . Just) commonGitBranch
   let objKey = mkObjectKey commonPrefix mGitBranch commonSuffix
-  return $ Config commonBucket objKey env commonVerbosity commonConcise Nothing commonMaxBytes
+  return $ Config commonBucket objKey env commonVerbosity commonConcise Nothing commonMaxBytes commonNumRetries
 
 
 runCacheS3 :: CommonArgs -> Action -> IO ()
@@ -148,6 +148,7 @@ runCacheS3 ca@CommonArgs {..} action = do
               commonConcise
               restoreMaxAge
               commonMaxBytes
+              commonNumRetries
         _ -> return ()
     RestoreStack (RestoreStackArgs {..}) -> do
       resolver <- getStackResolver restoreStackProject
