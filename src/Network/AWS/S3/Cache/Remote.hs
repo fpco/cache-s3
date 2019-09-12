@@ -388,14 +388,17 @@ runLoggingAWS action onErr onSucc = do
             unless ((conf ^. minLogLevel) == L.LevelDebug) $
               let errMsg =
                     case exc of
-                      HttpExceptionRequest _ (StatusCodeException resp _) ->
-                        "StatusCodeException: " <> T.pack (show (responseStatus resp))
-                      HttpExceptionRequest _ (TooManyRedirects rs) ->
-                        "TooManyRedirects: " <> T.pack (show (P.length rs))
-                      HttpExceptionRequest _ (InvalidHeader _) -> "InvalidHeader"
-                      HttpExceptionRequest _ (InvalidRequestHeader _) -> "InvalidRequestHeader"
-                      HttpExceptionRequest _ (InvalidProxyEnvironmentVariable name _) ->
-                        "InvalidProxyEnvironmentVariable: " <> name
+                      HttpExceptionRequest _ httpExcContent ->
+                        case httpExcContent of
+                          StatusCodeException resp _ ->
+                            "StatusCodeException: " <> T.pack (show (responseStatus resp))
+                          TooManyRedirects rs ->
+                            "TooManyRedirects: " <> T.pack (show (P.length rs))
+                          InvalidHeader _ -> "InvalidHeader"
+                          InvalidRequestHeader _ -> "InvalidRequestHeader"
+                          InvalidProxyEnvironmentVariable name _ ->
+                            "InvalidProxyEnvironmentVariable: " <> name
+                          _ -> T.pack (show httpExcContent)
                       _ -> T.pack (displayException exc)
                in logAWS LevelError $ "Critical HTTPException: " <> errMsg
             throwM exc
