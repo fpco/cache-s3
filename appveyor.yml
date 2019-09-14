@@ -47,7 +47,7 @@ after_test:
 - ps: >-
     if ( -not $env:APPVEYOR_PULL_REQUEST_NUMBER ) {
       if ( $env:APPVEYOR_REPO_BRANCH -eq "master" ) {
-        cache-s3 --prefix=$env:APPVEYOR_REPO_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows save -p .stack-work
+        cache-s3 --prefix=$env:APPVEYOR_REPO_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows save -p $env:WORK_DIR
         #cache-s3 --prefix=$env:APPVEYOR_REPO_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows save stack
       }
       cache-s3 --prefix=$env:APPVEYOR_REPO_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows save stack work
