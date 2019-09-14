@@ -31,7 +31,7 @@ getStackRootArg = maybe [] (\stackRoot -> ["--stack-root", stackRoot])
 getStackPath :: [String] -> FilePath -> IO FilePath
 getStackPath args pName =
   concat . filter (not . null) . lines <$>
-  readProcess "stack" (args ++ ["path"] ++ [pName]) ""
+  readProcess "stack" ("--no-terminal" : args ++ ["path"] ++ [pName]) ""
 
 
 getStackGlobalPaths :: Maybe FilePath -- ^ Stack root directory
