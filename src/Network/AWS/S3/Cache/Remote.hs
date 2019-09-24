@@ -51,16 +51,14 @@ import Network.AWS.S3.Types
 import Network.HTTP.Client
 import Network.HTTP.Types.Status (Status(statusMessage), status404)
 import Prelude as P
-import System.IO (hClose)
+--import System.IO (hClose)
 
-#if WINDOWS
 import Data.Conduit.Binary
 
 getInfoLoggerIO :: (MonadIO n, MonadLoggerIO m) => m (Text -> n ())
 getInfoLoggerIO = do
   loggerIO <- askLoggerIO
   return $ \ txt -> liftIO $ loggerIO defaultLoc "" LevelInfo (toLogStr txt)
-#endif
 
 -- | Returns the time when the cache object was created
 getCreateTime :: GetObjectResponse -> Maybe UTCTime
@@ -174,7 +172,6 @@ uploadCache isPublic tmpFile (cSize, newHash) = do
     ": " <>
     newHashTxt
   startTime <- liftIO getCurrentTime
-#if WINDOWS
   reporter <- getInfoLoggerIO
   runLoggingAWS_ $
     runConduit $
@@ -182,16 +179,15 @@ uploadCache isPublic tmpFile (cSize, newHash) = do
     passthroughSink (streamUpload (Just (100 * 2 ^ (20 :: Int))) cmu) (void . pure) .|
     getProgressReporter reporter cSize .|
     sinkNull
-#else
-  liftIO $ hClose (tempFileHandle tmpFile)
-  runLoggingAWS_ $
-    void $
-    concurrentUpload
-      (Just (8 * 1024 ^ (2 :: Int)))
-      (Just 10)
-      (FP (tempFilePath tmpFile))
-      cmu
-#endif
+  -- Disabled due to: 
+  -- liftIO $ hClose (tempFileHandle tmpFile)
+  -- runLoggingAWS_ $
+  --   void $
+  --   concurrentUpload
+  --     (Just (8 * 1024 ^ (2 :: Int)))
+  --     (Just 10)
+  --     (FP (tempFilePath tmpFile))
+  --     cmu
   endTime <- liftIO getCurrentTime
   reportSpeed cSize $ diffUTCTime endTime startTime
   logAWS LevelInfo "Finished uploading. Files are cached on S3."

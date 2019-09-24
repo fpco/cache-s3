@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -29,10 +30,13 @@ getStackRootArg :: Maybe FilePath -> [FilePath]
 getStackRootArg = maybe [] (\stackRoot -> ["--stack-root", stackRoot])
 
 getStackPath :: [String] -> FilePath -> IO FilePath
-getStackPath args pName =
-  concat . filter (not . null) . lines <$>
-  readProcess "stack" ("--no-terminal" : args ++ ["path"] ++ [pName]) ""
-
+getStackPath args pName = concat . filter (not . null) . lines <$> readCreateProcess p ""
+  where
+    p = (proc "stack" ("--no-terminal" : args ++ ["path"] ++ [pName]))
+#if WINDOWS
+      -- Ignore stderr due to: https://github.com/commercialhaskell/stack/issues/5038
+        {std_err = NoStream}
+#endif
 
 getStackGlobalPaths :: Maybe FilePath -- ^ Stack root directory
                     -> IO [FilePath]
