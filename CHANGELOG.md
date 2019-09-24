@@ -1,3 +1,8 @@
+# v0.1.10
+
+* Addition of new flag `--num-retries`
+* Updated Stackage LTS and had to switched back to sequential uploading, see [fpco/cache-s3#26](https://github.com/fpco/cache-s3/issues/26) for more info.
+
 # v0.1.9
 
 * Switch to `unliftio` for temporary file creation, fix cache uploading on Windows: [#23](https://github.com/fpco/cache-s3/issues/23)
