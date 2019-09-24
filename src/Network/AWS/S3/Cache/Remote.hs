@@ -174,7 +174,6 @@ uploadCache isPublic tmpFile (cSize, newHash) = do
     ": " <>
     newHashTxt
   startTime <- liftIO getCurrentTime
-  liftIO $ hClose (tempFileHandle tmpFile)
 #if WINDOWS
   reporter <- getInfoLoggerIO
   runLoggingAWS_ $
@@ -184,6 +183,7 @@ uploadCache isPublic tmpFile (cSize, newHash) = do
     getProgressReporter reporter cSize .|
     sinkNull
 #else
+  liftIO $ hClose (tempFileHandle tmpFile)
   runLoggingAWS_ $
     void $
     concurrentUpload
