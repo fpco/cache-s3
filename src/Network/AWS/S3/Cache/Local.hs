@@ -15,54 +15,40 @@
 
 module Network.AWS.S3.Cache.Local where
 
-import Conduit (PrimMonad)
-import Control.Exception.Safe (MonadCatch, MonadThrow, throwString)
-import Control.Monad (void, when)
-import Control.Monad.IO.Class (MonadIO(liftIO))
-import Control.Monad.Logger
-import Control.Monad.Trans.Resource (MonadResource)
+import Control.Monad.Trans.Resource (ResourceT, MonadResource)
 import Crypto.Hash (Digest, HashAlgorithm)
 import Crypto.Hash.Conduit
-import Data.ByteString as S
 import Data.Conduit
 import Data.Conduit.Binary
 import Data.Conduit.List as C
 import Data.Conduit.Tar
-import Data.List as L
-import Data.Maybe as Maybe
-import Data.Monoid ((<>))
-import Data.Text as T
-import Data.Word
+import RIO.List as L
 import Network.AWS.S3.Cache.Types
-import Prelude as P
-import System.Directory
-import System.FilePath
-import System.IO hiding (openTempFile)
+import RIO
+import RIO.Directory
+import RIO.FilePath
+import System.IO (SeekMode(AbsoluteSeek))
 
 
 tarFiles ::
-     (MonadCatch m, MonadResource m, MonadIO m)
-  => (LogLevel -> Text -> IO ())
+     (HasLogFunc env)
+  => [FilePath]
   -> [FilePath]
-  -> [FilePath]
-  -> ConduitM a ByteString m ()
-tarFiles logger dirs relativeDirs = do
-  liftIO $ logger LevelDebug "Preparing files for saving in the cache."
-  dirsCanonical <- liftIO $ P.mapM canonicalizePath dirs
-  uniqueDirs <- Maybe.catMaybes <$> P.mapM skipMissing (removeSubpaths dirsCanonical ++ relativeDirs)
-  if P.null uniqueDirs
-    then liftIO $ logger LevelError "No paths to cache has been specified."
+  -> ConduitM a ByteString (ResourceT (RIO env)) ()
+tarFiles dirs relativeDirs = do
+  logDebug "Preparing files for saving in the cache."
+  dirsCanonical <- RIO.mapM canonicalizePath dirs
+  uniqueDirs <-
+    RIO.catMaybes <$> RIO.mapM skipMissing (removeSubpaths dirsCanonical ++ relativeDirs)
+  if L.null uniqueDirs
+    then logError "No paths to cache has been specified."
     else sourceList uniqueDirs .| filePathConduit .| void tar
   where
     skipMissing fp = do
-      exist <- liftIO $ doesPathExist fp
+      exist <- doesPathExist fp
       if exist
-        then do
-          liftIO $ logger LevelInfo $ "Caching: " <> T.pack fp
-          return $ Just fp
-        else do
-          liftIO $ logger LevelWarn $ "File path is skipped since it is missing: " <> T.pack fp
-          return Nothing
+        then Just fp <$ logInfo ("Caching: " <> fromString fp)
+        else Nothing <$ logWarn ("File path is skipped since it is missing: " <> fromString fp)
 
 
 -- | Will remove any subfolders or files. Imput is expected to be a list of canonicalized file
@@ -102,40 +88,38 @@ prepareCache TempFile {tempFileHandle, tempFileCompression} = do
 -- algorithms. Returns the computed hash. File handle is set to the beginning of the file so the
 -- tarball can be read from.
 writeCacheTempFile ::
-     (HashAlgorithm h, MonadCatch m, MonadResource m, PrimMonad m, MonadThrow m)
+     (HasLogFunc env, HashAlgorithm h)
   =>
-     (LogLevel -> Text -> IO ())
-  -> [FilePath]
+     [FilePath]
   -> [FilePath]
   -> h
   -> TempFile
-  -> m (Word64, Digest h)
-writeCacheTempFile logger dirs relativeDirs _ tmpFile =
-  runConduit $ tarFiles logger dirs relativeDirs .| prepareCache tmpFile
+  -> RIO env (Word64, Digest h)
+writeCacheTempFile dirs relativeDirs _ tmpFile =
+  runConduitRes $ tarFiles dirs relativeDirs .| prepareCache tmpFile
 
 
 -- | Restores all of the files from the tarball and computes the hash at the same time.
 restoreFilesFromCache ::
-     (MonadIO m, MonadThrow m, MonadResource m, PrimMonad m, HashAlgorithm h)
+     (HasLogFunc env, HashAlgorithm h, MonadReader env m, PrimMonad m, MonadThrow m, MonadIO m)
   => FileOverwrite
-  -> (LogLevel -> Text -> IO ())
   -> Compression -- ^ Compression algorithm the stream is expected to be compressed with.
   -> h -- ^ Hashing algorithm to use for computation of hash value of the extracted tarball.
-  -> ConduitM ByteString Void m (Digest h)
-restoreFilesFromCache (FileOverwrite level) logger comp _ =
+  -> ConduitM ByteString Void (ResourceT m) (Digest h)
+restoreFilesFromCache (FileOverwrite level) comp _ =
   getDeCompressionConduit comp .|
   getZipConduit (ZipConduit (untarWithFinalizers restoreFile') *> ZipConduit sinkHash)
   where
     restoreFile' fi = do
       case fileType fi of
         FTDirectory -- Make sure nested folders are created:
-         -> liftIO $ createDirectoryIfMissing True (decodeFilePath (filePath fi))
+         -> createDirectoryIfMissing True (decodeFilePath (filePath fi))
         FTNormal -> do
           let fp = getFileInfoPath fi
-          fileExist <- liftIO $ doesFileExist fp
+          fileExist <- doesFileExist fp
           when fileExist $ do
             when (level == LevelError) $
               throwString $ "File with name already exists: " ++ fp
-            liftIO $ logger level $ "Restoring an existing file: " <> T.pack fp
+            logGeneric "" level $ "Restoring an existing file: " <> fromString fp
         _ -> return ()
       restoreFile fi
