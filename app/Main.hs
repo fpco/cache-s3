@@ -1,12 +1,11 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 module Main where
 
 import Control.Applicative as A
 import Data.Attoparsec.Text (parseOnly)
-import Data.Maybe
-import Data.Monoid ((<>))
-import Data.Text as T
+import RIO.Text as T
 import Data.Version (Version, showVersion)
 import Network.AWS hiding (LogLevel)
 import Network.AWS.Auth
@@ -14,9 +13,9 @@ import Network.AWS.Data
 import Network.AWS.S3.Cache
 import Network.AWS.S3.Types
 import Options.Applicative
-import Prelude as P
-import System.Environment
-import System.IO (BufferMode(LineBuffering), hSetBuffering, stdout)
+import RIO
+import RIO.Process
+import System.IO (BufferMode(LineBuffering))
 import Text.Read (readMaybe)
 
 
@@ -53,9 +52,9 @@ readRegion = do
 helpOption :: Parser (a -> a)
 helpOption = abortOption ShowHelpText (long "help" <> short 'h' <> help "Display this message.")
 
-commonArgsParser :: Version -> Maybe String -> Parser CommonArgs
+commonArgsParser :: Version -> Maybe Text -> Parser CommonArgs
 commonArgsParser version mS3Bucket =
-  CommonArgs . BucketName . T.pack <$>
+  CommonArgs . BucketName <$>
   strOption
     (long "bucket" <> short 'b' <> metavar "S3_BUCKET" <> maybe mempty value mS3Bucket <>
      help
@@ -308,7 +307,8 @@ actionParser =
 
 main :: IO ()
 main = do
-  s3Bucket <- lookupEnv "S3_BUCKET"
+  context <- mkDefaultProcessContext
+  s3Bucket <- runRIO context $ lookupEnv "S3_BUCKET"
   cFile <- credFile
   Args commonArgs acts <-
     execParser $
@@ -327,4 +327,5 @@ main = do
           T.unpack envSecretKey) <>
        fullDesc)
   hSetBuffering stdout LineBuffering
-  runCacheS3 commonArgs acts
+  let logFunc = mkCacheS3LogFunc stdout (commonConcise commonArgs) (commonVerbosity commonArgs)
+  runRIO (App logFunc context) $ runCacheS3 commonArgs acts

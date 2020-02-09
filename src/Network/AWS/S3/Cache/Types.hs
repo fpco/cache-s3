@@ -2,14 +2,14 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 -- |
 -- Module      : Network.AWS.S3.Cache.Types
--- Copyright   : (c) FP Complete 2017
+-- Copyright   : (c) FP Complete 2017-2020
 -- License     : BSD3
 -- Maintainer  : Alexey Kuleshevich <alexey@fpcomplete.com>
 -- Stability   : experimental
@@ -17,11 +17,9 @@
 --
 module Network.AWS.S3.Cache.Types where
 
+import Conduit (ConduitT, PrimMonad)
 import Control.Applicative
-import Control.Lens hiding ((<.>))
-import Control.Exception.Safe (MonadThrow)
-import Control.Monad.Logger as L
-import Conduit (PrimMonad, ConduitT)
+import Control.Lens (makeLensesWith, classUnderscoreNoPrefixFields)
 import Control.Monad.Trans.Resource (MonadResource)
 import Crypto.Hash
 import Data.Attoparsec.ByteString.Char8
@@ -29,17 +27,17 @@ import Data.ByteString (ByteString)
 import Data.ByteString.Char8 as S8
 import Data.Char as C (toLower)
 import Data.Conduit.Zlib
-import Data.Functor (($>))
-import Data.Maybe (fromMaybe, listToMaybe)
-import Data.Monoid ((<>))
-import Data.Text as T
-import Data.Text.Encoding as T
-import Data.Time
 import Data.Typeable
 import Network.AWS.Env
 import Network.AWS.S3.Types
-import Prelude as P
-import System.FilePath
+import RIO
+import RIO.FilePath
+import RIO.List as List
+import RIO.List.Partial as ListPartial (last)
+import qualified RIO.Map as Map
+import RIO.Process (HasProcessContext(..), ProcessContext, envVarsL)
+import RIO.Text as T
+import RIO.Time
 import System.IO (Handle)
 
 #if !WINDOWS
@@ -49,23 +47,41 @@ import qualified Data.Conduit.LZ4 as LZ4
 data Config = Config
   { _bucketName  :: !BucketName
   , _objectKey   :: !ObjectKey
-  , _confEnv     :: !Env
-  , _minLogLevel :: !L.LogLevel
+  , confEnv      :: !Env
+  , _minLogLevel :: !LogLevel
   , _isConcise   :: !Bool
   , _maxAge      :: !(Maybe NominalDiffTime)
   , _maxSize     :: !(Maybe Integer)
   , _numRetries  :: !Int
+  , configApp    :: !App
   }
+
+-- TODO: Replace with SimpleApp, when constructor becomes available (exported from
+-- RIO.Prelude.Simple): https://github.com/commercialhaskell/rio/issues/208
+data App = App
+  { saLogFunc        :: !LogFunc
+  , saProcessContext :: !ProcessContext
+  }
+instance HasLogFunc App where
+  logFuncL = lens saLogFunc (\x y -> x { saLogFunc = y })
+instance HasProcessContext App where
+  processContextL = lens saProcessContext (\x y -> x { saProcessContext = y })
+
 
 makeLensesWith classUnderscoreNoPrefixFields ''Config
 
 newtype FileOverwrite =
-  FileOverwrite L.LogLevel
+  FileOverwrite LogLevel
   deriving (Eq, Show)
 
 instance HasEnv Config where
-  environment = confEnv
+  environment = lens confEnv (\conf env -> conf {confEnv = env})
 
+instance HasLogFunc Config where
+  logFuncL = lens configApp (\conf env -> conf {configApp = env}) . logFuncL
+
+instance HasProcessContext Config where
+  processContextL = lens configApp (\conf env -> conf {configApp = env}) . processContextL
 
 
 mkObjectKey :: Maybe Text -- ^ Prefix (eg. project name)
@@ -85,7 +101,7 @@ data CommonArgs = CommonArgs
   , commonGitDir     :: !(Maybe FilePath)
   , commonGitBranch  :: !(Maybe Text)
   , commonSuffix     :: !(Maybe Text)
-  , commonVerbosity  :: !L.LogLevel
+  , commonVerbosity  :: !LogLevel
   , commonConcise    :: !Bool
   , commonMaxBytes   :: !(Maybe Integer)
   , commonNumRetries :: !Int
@@ -156,6 +172,11 @@ data TempFile = TempFile
 makeTempFileNamePattern :: Compression -> FilePath
 makeTempFileNamePattern compression = "cache-s3.tar" <.> T.unpack (getCompressionName compression)
 
+-- | Look into the `ProcessContext` and see if there is environmet variable available there.
+lookupEnv :: (MonadReader env m, HasProcessContext env) => Text -> m (Maybe Text)
+lookupEnv envName = Map.lookup envName <$> view envVarsL
+
+
 ----------------
 --- Time -------
 ----------------
@@ -168,34 +189,39 @@ data Interval
   | Seconds Integer
   deriving (Show)
 
-formatDiffTime :: NominalDiffTime -> Text
-formatDiffTime nd = go "" (Seconds <$> divMod (round nd) 60)
+formatDiffTime :: NominalDiffTime -> Utf8Builder
+formatDiffTime nd = go True "" (Seconds <$> divMod (round nd) 60)
   where
-    go acc =
+    go isAccEmpty acc =
       \case
         (_, Years y)
-          | y > 0 -> showTime y "year" ", " acc
+          | y > 0 ->
+             showTime isAccEmpty y "year" ", " acc
         (n, Days d)
-          | d > 0 || n > 0 -> go (showTime d "day" ", " acc) (0, Years n)
+          | d > 0 || n > 0 ->
+             go False (showTime isAccEmpty d "day" ", " acc) (0, Years n)
         (n, Hours h)
-          | h > 0 || n > 0 -> go (showTime h "hour" ", " acc) (Days <$> divMod n 365)
+          | h > 0 || n > 0 ->
+             go False (showTime isAccEmpty h "hour" ", " acc) (Days <$> divMod n 365)
         (n, Minutes m)
-          | m > 0 || n > 0 -> go (showTime m "minute" ", " acc) (Hours <$> divMod n 24)
-        (n, Seconds s) -> go (showTime s "second" "" acc) (Minutes <$> divMod n 60)
+          | m > 0 || n > 0 ->
+             go False (showTime isAccEmpty m "minute" ", " acc) (Hours <$> divMod n 24)
+        (n, Seconds s) ->
+             go False (showTime isAccEmpty s "second" "" acc) (Minutes <$> divMod n 60)
         _ -> acc
-    showTime 0 _    _   acc = acc
-    showTime t tTxt sep acc =
-      T.pack (show t) <> " " <> tTxt <>
+    showTime _          0 _    _   acc = acc
+    showTime isAccEmpty t tTxt sep acc =
+      display t <> " " <> tTxt <>
       (if t == 1
          then ""
          else "s") <>
-      (if T.null acc
+      (if isAccEmpty
          then acc
          else sep <> acc)
 
 parseDiffTime :: Text -> Maybe NominalDiffTime
 parseDiffTime =
-  either (const Nothing) (Just . fromInteger . sum . P.map toSec) .
+  either (const Nothing) (Just . fromInteger . sum . RIO.map toSec) .
   parseOnly (intervalParser <* skipSpace <* endOfInput) . T.encodeUtf8 . T.toLower
   where
     toSec =
@@ -217,14 +243,14 @@ parseDiffTime =
         , Seconds <$> decimal <* skipSpace <* ("second" <* maybePlural <|> "sec" <|> "s")
         ]
 
-formatRFC822 :: UTCTime -> Text
-formatRFC822 = T.pack . formatTime defaultTimeLocale rfc822DateFormat
+formatRFC822 :: UTCTime -> Utf8Builder
+formatRFC822 = fromString . formatTime defaultTimeLocale rfc822DateFormat
 
 parseISO8601 :: Text -> Maybe UTCTime
 parseISO8601 = parseTimeM False defaultTimeLocale iso8601 . T.unpack
 
-formatISO8601 :: UTCTime -> Text
-formatISO8601 = T.pack . formatTime defaultTimeLocale iso8601
+formatISO8601 :: UTCTime -> Utf8Builder
+formatISO8601 = fromString . formatTime defaultTimeLocale iso8601
 
 iso8601 :: String
 iso8601 = iso8601DateFormat (Just "%H:%M:%S%Q%z")
@@ -235,32 +261,32 @@ parseBytes =
   either (const Nothing) Just .
   parseOnly ((*) <$> decimal <*> multiplier) . T.encodeUtf8 . T.toLower
   where
-    (mults, abbrs) = P.unzip bytesMult
+    (mults, abbrs) = List.unzip bytesMult
     abbrsParser =
-      P.zipWith
+      List.zipWith
         (<|>)
-        (P.map (string . S8.pack . P.map C.toLower) abbrs)
+        (List.map (string . S8.pack . List.map C.toLower) abbrs)
         ["", "kb", "mb", "gb", "tb", "pb", "eb", "zb", "yb"]
-    multiplier = skipSpace *> choice [p $> f | (p, f) <- P.reverse $ P.zip abbrsParser mults]
+    multiplier = skipSpace *> choice [p $> f | (p, f) <- List.reverse $ List.zip abbrsParser mults]
 
 
-formatBytes :: Integer -> Text
+formatBytes :: Integer -> Utf8Builder
 formatBytes val =
-  fmt $ fromMaybe (P.last scaled) $ listToMaybe $ P.dropWhile ((>= 10240) . fst) scaled
+  fmt $ fromMaybe (ListPartial.last scaled) $ listToMaybe $ List.dropWhile ((>= 10240) . fst) scaled
   where
     fmt (sVal10, n) =
-      (\(d, m) -> T.pack (show d) <> "." <> T.pack (show m)) (sVal10 `divMod` 10) <> " " <> n
+      (\(d, m) -> display d <> "." <> display m) (sVal10 `divMod` 10) <> " " <> n
     val10 = 10 * val
     scale (s, r) =
       s +
       if r < 512
         then 0
         else 1
-    scaled = [(scale (val10 `divMod` t), T.pack abbr) | (t, abbr) <- bytesMult]
+    scaled = [(scale (val10 `divMod` t), abbr) | (t, abbr) <- bytesMult]
 
-bytesMult :: [(Integer, String)]
+bytesMult :: IsString s => [(Integer, s)]
 bytesMult =
-  P.zip
+  List.zip
     [2 ^ (x * 10) | x <- [0 :: Int ..]]
     ["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB"]
 
@@ -396,7 +422,7 @@ getCompressionName :: Compression -> Text
 getCompressionName = T.toLower . T.pack . show
 
 supportedCompression :: Text
-supportedCompression = T.intercalate ", " $ getCompressionName <$> enumFrom GZip
+supportedCompression = T.intercalate ", " $ getCompressionName <$> [GZip ..]
 
 readCompression :: Text -> Maybe Compression
 readCompression compTxt =

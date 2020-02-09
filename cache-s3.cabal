@@ -20,9 +20,9 @@ library
   exposed-modules:     Network.AWS.S3.Cache
                      , Network.AWS.S3.Cache.Local
   other-modules:       Network.AWS.S3.Cache.Remote
-                     , Network.AWS.S3.Cache.Types
                      , Network.AWS.S3.Cache.Stack
-                     , Paths_cache_s3
+                     , Network.AWS.S3.Cache.Types
+                       Paths_cache_s3
   build-depends:       aeson
                      , amazonka
                      , amazonka-core
@@ -36,27 +36,19 @@ library
                      , conduit-extra
                      , cryptonite
                      , cryptonite-conduit
-                     , directory >= 1.3.0.0
-                     , fast-logger >= 2.1.0
-                     , filepath
                      , git
                      , http-client
                      , http-types
                      , lens
                      , memory
-                     , monad-control
-                     , monad-logger
                      , mtl
-                     , process
                      , resourcet
-                     , safe-exceptions
+                     , rio
+                     , rio-orphans
                      , tar-conduit >= 0.2.0
                      , text
-                     , time
                      , transformers >= 0.5.2.0
                      , unliftio
-                     , unordered-containers
-                     , vector >= 0.12.0.0
                      , yaml
   default-language:    Haskell2010
   ghc-options:         -Wall
@@ -76,7 +68,7 @@ executable cache-s3
                      , base
                      , cache-s3
                      , optparse-applicative
-                     , text
+                     , rio
   default-language:    Haskell2010
 
 test-suite tests

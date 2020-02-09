@@ -2,6 +2,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 -- |
 -- Module      : Network.AWS.S3.Cache.Stack
 -- Copyright   : (c) FP Complete 2017
@@ -12,43 +13,49 @@
 --
 module Network.AWS.S3.Cache.Stack where
 
-import Control.Exception (throwIO)
 import Data.Aeson
 import Data.Git
-import qualified Data.HashMap.Strict as HM
-import Data.Maybe (fromMaybe, isJust)
+import qualified RIO.HashMap as HM
 import Data.String
-import qualified Data.Text as T
-import qualified Data.Vector as V
+import qualified RIO.ByteString.Lazy as BL
+import qualified RIO.Text as T
+import Data.Text.Encoding.Error (strictDecode)
+import qualified RIO.Vector as V
 import Data.Yaml
 import Network.AWS.S3.Cache.Types
-import System.Environment
-import System.FilePath
-import System.Process
+import RIO
+import RIO.FilePath
+import RIO.Process
 
 getStackRootArg :: Maybe FilePath -> [FilePath]
 getStackRootArg = maybe [] (\stackRoot -> ["--stack-root", stackRoot])
 
-getStackPath :: [String] -> FilePath -> IO FilePath
-getStackPath args pName = concat . filter (not . null) . lines <$> readCreateProcess p ""
+getStackPath :: (HasProcessContext env, HasLogFunc env)
+            => [String] -> FilePath -> RIO env FilePath
+getStackPath args pName = T.unpack . T.concat . filter (not . T.null) . T.lines . T.decodeUtf8With strictDecode . BL.toStrict . snd <$> p
   where
-    p = (proc "stack" ("--no-terminal" : args ++ ["path"] ++ [pName]))
+    p = proc "stack" ("--no-terminal" : args ++ ["path"] ++ [pName])
+        (readProcess_
 #if WINDOWS
-      -- Ignore stderr due to: https://github.com/commercialhaskell/stack/issues/5038
-        {std_err = NoStream}
+        -- Ignore stderr due to: https://github.com/commercialhaskell/stack/issues/5038
+        . setStderr closed
 #endif
+        )
 
-getStackGlobalPaths :: Maybe FilePath -- ^ Stack root directory
-                    -> IO [FilePath]
+
+getStackGlobalPaths :: (HasProcessContext env, HasLogFunc env)
+                    => Maybe FilePath -- ^ Stack root directory
+                    -> RIO env [FilePath]
 getStackGlobalPaths mStackRoot =
   mapM (getStackPath (getStackRootArg mStackRoot)) ["--stack-root", "--programs"]
 
 
-getStackResolver :: StackProject -> IO T.Text
+getStackResolver :: (HasProcessContext env, HasLogFunc env)
+                => StackProject -> RIO env T.Text
 getStackResolver StackProject { stackResolver = Just resolver } = pure resolver
 getStackResolver StackProject {stackYaml = mStackYaml} = do
   yaml <- getStackYaml mStackYaml
-  eObj <- decodeFileEither yaml
+  eObj <- liftIO $ decodeFileEither yaml
   case eObj of
     Left exc -> throwIO exc
     Right (Object (HM.lookup "resolver" -> mPackages))
@@ -60,19 +67,21 @@ getStackResolver StackProject {stackYaml = mStackYaml} = do
 
 
 
-getStackYaml :: Maybe FilePath -> IO FilePath
+getStackYaml :: (HasProcessContext env, HasLogFunc env)
+             => Maybe FilePath -> RIO env FilePath
 getStackYaml =
   \case
     Just yaml -> return yaml
-    Nothing -> fromMaybe "stack.yaml" <$> lookupEnv "STACK_YAML"
+    Nothing -> maybe "stack.yaml" T.unpack <$> lookupEnv "STACK_YAML"
 
 
-getStackWorkPaths :: Maybe FilePath -- ^ Stack root. It is needed in order to prevent stack from
+getStackWorkPaths :: (HasProcessContext env, HasLogFunc env)
+                  => Maybe FilePath -- ^ Stack root. It is needed in order to prevent stack from
                                     -- starting to install ghc and the rest in case when root folder
                                     -- is custom.
                   -> Maybe FilePath -- ^ Path to --stack-yaml
                   -> Maybe FilePath -- ^ Relative path for --work-dir
-                  -> IO [FilePath]
+                  -> RIO env [FilePath]
 getStackWorkPaths mStackRoot mStackYaml mWorkDir = do
   let fromStr (String ".") = Nothing -- Project root will be added separately
       fromStr (String str) = Just $ T.unpack str
@@ -83,8 +92,8 @@ getStackWorkPaths mStackRoot mStackYaml mWorkDir = do
   workDir <-
     case mWorkDir of
       Just workDir -> return workDir
-      Nothing      -> fromMaybe ".stack-work" <$> lookupEnv "STACK_WORK"
-  eObj <- decodeFileEither yaml
+      Nothing      -> maybe ".stack-work" T.unpack <$> lookupEnv "STACK_WORK"
+  eObj <- liftIO $ decodeFileEither yaml
   pathPkgs <-
     case eObj of
       Left exc -> throwIO exc
@@ -94,19 +103,19 @@ getStackWorkPaths mStackRoot mStackYaml mWorkDir = do
       _ -> pure []
   return ((projectRoot </> workDir) : map (\pkg -> projectRoot </> pkg </> workDir) pathPkgs)
 
-
 -- | Will do its best to find the git repo and get the current branch name, unless GIT_BRANCH env
 -- var is set, in which case its value is returned.
 getBranchName ::
-     Maybe FilePath -- ^ Path to @.git@ repo. Current path will be traversed upwards in search for
+     (HasProcessContext env, HasLogFunc env)
+  => Maybe FilePath -- ^ Path to @.git@ repo. Current path will be traversed upwards in search for
                     -- one if `Nothing` is supplied.
-  -> IO (Maybe T.Text)
+  -> RIO env (Maybe T.Text)
 getBranchName mGitPath = do
   mBranchName <- lookupEnv "GIT_BRANCH"
   case mBranchName of
-    Just branchName -> return $ Just $ T.pack branchName
+    Just branchName -> return $ Just branchName
     Nothing ->
       either (const Nothing) (Just . T.pack . refNameRaw) <$>
       case mGitPath of
-        Nothing -> withCurrentRepo headGet
-        Just fp -> withRepo (fromString fp) headGet
+        Nothing -> liftIO $ withCurrentRepo headGet
+        Just fp -> liftIO $ withRepo (fromString fp) headGet
